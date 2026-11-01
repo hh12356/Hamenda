@@ -1,0 +1,536 @@
+package io.github.hh12356.hamenda.ui
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.times
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.zIndex
+import io.github.hh12356.hamenda.data.AppSettings
+import io.github.hh12356.hamenda.data.CourseBlock
+import io.github.hh12356.hamenda.data.DEFAULT_COLORS
+import io.github.hh12356.hamenda.data.SCHOOL_PERIODS
+import io.github.hh12356.hamenda.data.Store
+import io.github.hh12356.hamenda.util.currentWeek
+import io.github.hh12356.hamenda.util.dateFor
+import io.github.hh12356.hamenda.util.dayName
+import io.github.hh12356.hamenda.util.daysOf
+import io.github.hh12356.hamenda.util.minuteLabel
+import io.github.hh12356.hamenda.util.snap15
+import io.github.hh12356.hamenda.util.weekRangeLabel
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
+import java.time.LocalDate
+import kotlin.math.roundToInt
+
+private val LEFT_WIDTH = 44.dp
+private const val SWIPE_THRESHOLD_PX = 120f
+
+private data class DragPreview(
+    val blockId: Long,
+    val dayIndex: Int,
+    val startMin: Int,
+    val endMin: Int
+)
+
+private data class EditTarget(val block: CourseBlock)
+
+@Composable
+fun WeekScreen(store: Store, onOpenSettings: () -> Unit) {
+    val settings = store.data.settings
+    val today = LocalDate.now()
+    var week by remember(settings.semesterStart, settings.weekStartMonday) {
+        mutableIntStateOf(currentWeek(settings, today))
+    }
+    var editTarget by remember { mutableStateOf<EditTarget?>(null) }
+    var detailBlock by remember { mutableStateOf<CourseBlock?>(null) }
+    var menuBlock by remember { mutableStateOf<CourseBlock?>(null) }
+
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+        ) {
+            TopBar(
+                settings = settings,
+                week = week,
+                onPrev = { if (week > 1) week-- },
+                onNext = { week++ },
+                onOpenSettings = onOpenSettings
+            )
+            DayHeaderRow(settings, week, today)
+            WeekTimeline(
+                store = store,
+                settings = settings,
+                week = week,
+                modifier = Modifier.weight(1f),
+                onChangeWeek = { delta -> if (week + delta >= 1) week += delta },
+                onCreate = { day, minute ->
+                    editTarget = EditTarget(
+                        CourseBlock(
+                            id = System.nanoTime(),
+                            dayOfWeek = day,
+                            startMin = minute,
+                            endMin = (minute + 45).coerceAtMost(settings.dayEndMin),
+                            color = DEFAULT_COLORS[store.data.blocks.size % DEFAULT_COLORS.size]
+                        )
+                    )
+                },
+                onTapBlock = { detailBlock = it },
+                onLongPressBlock = { menuBlock = it }
+            )
+        }
+
+        editTarget?.let { target ->
+            EditScreen(
+                initial = target.block,
+                onCancel = { editTarget = null },
+                onSave = { block ->
+                    store.upsertBlock(block)
+                    editTarget = null
+                }
+            )
+        }
+    }
+
+    detailBlock?.let { block ->
+        AlertDialog(
+            onDismissRequest = { detailBlock = null },
+            confirmButton = { TextButton(onClick = { detailBlock = null }) { Text("关闭") } },
+            title = { Text(block.name.ifBlank { "未命名课程" }) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (block.teacher.isNotBlank()) Text("老师：${block.teacher}")
+                    if (block.location.isNotBlank()) Text("地点：${block.location}")
+                    Text("时间：${dayName(block.dayOfWeek)} ${minuteLabel(block.startMin)}–${minuteLabel(block.endMin)}")
+                    Text("周次：${weekRangeLabel(block)}")
+                }
+            }
+        )
+    }
+
+    menuBlock?.let { block ->
+        CourseMenuDialog(
+            block = block,
+            onDismiss = { menuBlock = null },
+            onEdit = { menuBlock = null; editTarget = EditTarget(block) },
+            onDeleteThis = { menuBlock = null; store.deleteBlock(block.id) },
+            onDeleteCourse = { menuBlock = null; store.deleteByName(block.name) }
+        )
+    }
+}
+
+@Composable
+private fun TopBar(
+    settings: AppSettings,
+    week: Int,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
+    onOpenSettings: () -> Unit
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(54.dp)
+            .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (settings.showWeekArrows) {
+            TextButton(onClick = onPrev) { Text("‹", fontSize = 24.sp) }
+        } else {
+            Spacer(Modifier.width(8.dp))
+        }
+        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("第 $week 周", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                weekDateRangeLabel(settings, week),
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (settings.showWeekArrows) {
+            TextButton(onClick = onNext) { Text("›", fontSize = 24.sp) }
+        } else {
+            Spacer(Modifier.width(8.dp))
+        }
+        TextButton(onClick = onOpenSettings) { Text("⚙", fontSize = 18.sp) }
+    }
+}
+
+@Composable
+private fun DayHeaderRow(settings: AppSettings, week: Int, today: LocalDate) {
+    Row(Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 4.dp)) {
+        Spacer(Modifier.width(LEFT_WIDTH))
+        daysOf(settings).forEach { iso ->
+            val date = dateFor(settings, week, iso)
+            val isToday = date == today
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    dayName(iso),
+                    fontSize = 12.sp,
+                    fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                    color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "${date.monthValue}-${date.dayOfMonth}",
+                    fontSize = 10.sp,
+                    color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                )
+            }
+        }
+    }
+}
+
+private fun weekDateRangeLabel(settings: AppSettings, week: Int): String {
+    val days = daysOf(settings)
+    val start = dateFor(settings, week, days.first())
+    val end = dateFor(settings, week, days.last())
+    return "${start.monthValue}-${start.dayOfMonth} ~ ${end.monthValue}-${end.dayOfMonth}"
+}
+
+@Composable
+private fun WeekTimeline(
+    store: Store,
+    settings: AppSettings,
+    week: Int,
+    modifier: Modifier = Modifier,
+    onChangeWeek: (Int) -> Unit,
+    onCreate: (Int, Int) -> Unit,
+    onTapBlock: (CourseBlock) -> Unit,
+    onLongPressBlock: (CourseBlock) -> Unit
+) {
+    val days = remember(settings.fiveDayMode, settings.weekStartMonday) { daysOf(settings) }
+    val blocks = store.data.blocks
+    var drag by remember { mutableStateOf<DragPreview?>(null) }
+
+    BoxWithConstraints(modifier.fillMaxWidth().clipToBounds()) {
+        val totalMinutes = (settings.dayEndMin - settings.dayStartMin).coerceAtLeast(60)
+        val dpPerMin = maxHeight / totalMinutes
+        val colWidth = (maxWidth - LEFT_WIDTH) / days.size
+        val density = LocalDensity.current
+        val colWidthPx = with(density) { colWidth.toPx() }
+        val pxPerMin = with(density) { dpPerMin.toPx() }
+        val leftPx = with(density) { LEFT_WIDTH.toPx() }
+
+        val separator = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        val grid = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
+        val highlight = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+
+        fun previewFrom(block: CourseBlock, originIdx: Int, acc: Offset): DragPreview {
+            val dayOffset = (acc.x / colWidthPx).roundToInt()
+            val newIdx = (originIdx + dayOffset).coerceIn(0, days.size - 1)
+            val raw = block.startMin + (acc.y / pxPerMin).toInt()
+            val maxStart = (settings.dayEndMin - block.duration).coerceAtLeast(settings.dayStartMin)
+            val start = snap15(raw).coerceIn(settings.dayStartMin, maxStart)
+            return DragPreview(block.id, newIdx, start, start + block.duration)
+        }
+
+        Box(
+            Modifier
+                .fillMaxSize()
+                .pointerInput(days, week) {
+                    var total = 0f
+                    detectHorizontalDragGestures(
+                        onDragStart = { total = 0f },
+                        onHorizontalDrag = { _, amount -> total += amount },
+                        onDragEnd = {
+                            if (total < -SWIPE_THRESHOLD_PX) onChangeWeek(1)
+                            else if (total > SWIPE_THRESHOLD_PX) onChangeWeek(-1)
+                        }
+                    )
+                }
+                .pointerInput(days, week, settings.dayStartMin, settings.dayEndMin, blocks) {
+                    detectTapGestures(
+                        onLongPress = { offset ->
+                            if (offset.x >= leftPx) {
+                                val idx = ((offset.x - leftPx) / colWidthPx).toInt().coerceIn(0, days.size - 1)
+                                val minute = snap15(settings.dayStartMin + (offset.y / pxPerMin).toInt())
+                                val hit = blocks.any { b ->
+                                    b.dayOfWeek == days[idx] && b.activeInWeek(week) &&
+                                        minute in b.startMin until b.endMin
+                                }
+                                if (!hit) onCreate(days[idx], minute)
+                            }
+                        }
+                    )
+                }
+        ) {
+            Canvas(Modifier.fillMaxSize()) {
+                for (i in 0..days.size) {
+                    val x = leftPx + i * colWidthPx
+                    drawLine(separator, Offset(x, 0f), Offset(x, size.height), 1.dp.toPx())
+                }
+                drag?.let { d ->
+                    val x0 = leftPx + d.dayIndex * colWidthPx
+                    drawRect(highlight, Offset(x0, 0f), Size(colWidthPx, size.height))
+                    var m = settings.dayStartMin
+                    while (m <= settings.dayEndMin) {
+                        val y = (m - settings.dayStartMin) * pxPerMin
+                        drawLine(grid, Offset(leftPx, y), Offset(size.width, y), 1.dp.toPx())
+                        m += 15
+                    }
+                }
+            }
+
+            LeftLabels(
+                settings = settings,
+                dpPerMin = dpPerMin,
+                onCycle = {
+                    store.updateSettings { s -> s.copy(leftLabelMode = (s.leftLabelMode + 1) % 3) }
+                }
+            )
+
+            days.forEachIndexed { idx, iso ->
+                blocks.forEach { block ->
+                    if (block.dayOfWeek == iso && block.activeInWeek(week)) {
+                        val preview = drag?.takeIf { it.blockId == block.id }
+                        val targetIdx = preview?.dayIndex ?: idx
+                        val start = preview?.startMin ?: block.startMin
+                        val end = preview?.endMin ?: block.endMin
+                        if (end > settings.dayStartMin && start < settings.dayEndMin) {
+                            val top = (start - settings.dayStartMin).toFloat() * dpPerMin
+                            val height = (end - start).toFloat() * dpPerMin
+                            val x = LEFT_WIDTH + colWidth * targetIdx.toFloat() + 1.dp
+
+                            val gesture = Modifier.pointerInput(
+                                block, week, colWidthPx, pxPerMin, days.size
+                            ) {
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(requireUnconsumed = false)
+                                    var timedOut = false
+                                    val up = try {
+                                        withTimeout(viewConfiguration.longPressTimeoutMillis) {
+                                            waitForUpOrCancellation()
+                                        }
+                                    } catch (e: TimeoutCancellationException) {
+                                        timedOut = true
+                                        null
+                                    }
+                                    if (up != null) {
+                                        onTapBlock(block)
+                                        return@awaitEachGesture
+                                    }
+                                    if (!timedOut) return@awaitEachGesture
+
+                                    var acc = Offset.Zero
+                                    var moved = false
+                                    try {
+                                        while (true) {
+                                            val event = awaitPointerEvent()
+                                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                            if (!change.pressed) {
+                                                change.consume()
+                                                break
+                                            }
+                                            val delta = change.positionChange()
+                                            if (delta != Offset.Zero) {
+                                                acc += delta
+                                                change.consume()
+                                                moved = true
+                                                drag = previewFrom(block, idx, acc)
+                                            }
+                                            if (event.changes.none { it.pressed }) break
+                                        }
+                                    } finally {
+                                        if (moved) {
+                                            drag?.takeIf { it.blockId == block.id }?.let { p ->
+                                                store.upsertBlock(
+                                                    block.copy(
+                                                        dayOfWeek = days[p.dayIndex],
+                                                        startMin = p.startMin,
+                                                        endMin = p.endMin
+                                                    )
+                                                )
+                                            }
+                                        }
+                                        drag = null
+                                    }
+                                    if (!moved) onLongPressBlock(block)
+                                }
+                            }
+
+                            val bg = Color(block.color)
+                            val fg = if (bg.luminance() > 0.5f) Color(0xFF2A2A2A) else Color.White
+
+                            Column(
+                                Modifier
+                                    .offset(x = x, y = top)
+                                    .width(colWidth - 2.dp)
+                                    .height(height.coerceAtLeast(1.dp))
+                                    .zIndex(if (preview != null) 1f else 0f)
+                                    .background(bg, RoundedCornerShape(6.dp))
+                                    .then(gesture)
+                                    .padding(3.dp)
+                            ) {
+                                Text(
+                                    block.name,
+                                    fontSize = 9.sp,
+                                    lineHeight = 10.sp,
+                                    maxLines = 4,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = fg,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                if (block.teacher.isNotBlank()) {
+                                    Text(
+                                        block.teacher,
+                                        fontSize = 8.sp,
+                                        lineHeight = 9.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = fg.copy(alpha = 0.8f)
+                                    )
+                                }
+                                if (block.location.isNotBlank()) {
+                                    Text(
+                                        block.location,
+                                        fontSize = 8.sp,
+                                        lineHeight = 9.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = fg.copy(alpha = 0.8f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LeftLabels(settings: AppSettings, dpPerMin: Dp, onCycle: () -> Unit) {
+    Box(
+        Modifier
+            .fillMaxHeight()
+            .width(LEFT_WIDTH)
+            .clickable(onClick = onCycle)
+    ) {
+        val labels = remember(settings.leftLabelMode, settings.dayStartMin, settings.dayEndMin) {
+            buildLeftLabels(settings)
+        }
+        labels.forEach { (minute, text) ->
+            val y = (minute - settings.dayStartMin).toFloat() * dpPerMin
+            Text(
+                text = text,
+                modifier = Modifier.offset(x = 4.dp, y = y - 6.dp),
+                fontSize = 9.sp,
+                lineHeight = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+private fun buildLeftLabels(settings: AppSettings): List<Pair<Int, String>> = when (settings.leftLabelMode) {
+    1 -> SCHOOL_PERIODS
+        .filter { it.startMin >= settings.dayStartMin && it.endMin <= settings.dayEndMin }
+        .map { it.startMin to "${it.index}" }
+
+    2 -> SCHOOL_PERIODS
+        .filter { it.startMin >= settings.dayStartMin && it.endMin <= settings.dayEndMin }
+        .map { it.startMin to "${minuteLabel(it.startMin)}\n${minuteLabel(it.endMin)}" }
+
+    else -> {
+        val result = mutableListOf<Pair<Int, String>>()
+        var h = ((settings.dayStartMin + 59) / 60) * 60
+        while (h <= settings.dayEndMin) {
+            result += h to minuteLabel(h)
+            h += 60
+        }
+        result
+    }
+}
+
+@Composable
+private fun CourseMenuDialog(
+    block: CourseBlock,
+    onDismiss: () -> Unit,
+    onEdit: () -> Unit,
+    onDeleteThis: () -> Unit,
+    onDeleteCourse: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(18.dp), tonalElevation = 6.dp) {
+            Column(Modifier.width(230.dp).padding(vertical = 6.dp)) {
+                Text(
+                    block.name.ifBlank { "未命名课程" },
+                    Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                HorizontalDivider()
+                MenuItemText("编辑", onEdit)
+                MenuItemText("删除这节课", onDeleteThis, danger = true)
+                MenuItemText("删除这门课", onDeleteCourse, danger = true)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MenuItemText(text: String, onClick: () -> Unit, danger: Boolean = false) {
+    Text(
+        text,
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 13.dp),
+        fontSize = 14.sp,
+        color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+    )
+}
