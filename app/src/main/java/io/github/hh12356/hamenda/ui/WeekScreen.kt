@@ -90,10 +90,15 @@ private const val SWIPE_THRESHOLD_PX = 120f
 
 private data class DragPreview(
     val blockId: Long,
-    val dayIndex: Int,
+    val originIdx: Int,
+    val dxPx: Float,
     val startMin: Float,
     val duration: Int
-)
+) {
+    /** 松手/高光才吸附到某一列，拖动过程中块是连续的。 */
+    fun targetIdx(colWidthPx: Float, dayCount: Int): Int =
+        (originIdx + (dxPx / colWidthPx).roundToInt()).coerceIn(0, dayCount - 1)
+}
 
 private data class EditTarget(val block: CourseBlock)
 
@@ -317,17 +322,22 @@ private fun WeekTimeline(
 
         val separator = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)
         val hourGrid = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
-        val dragGrid = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
         val highlight = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f)
         val todayTint = MaterialTheme.colorScheme.primary.copy(alpha = 0.045f)
 
         fun previewFrom(block: CourseBlock, originIdx: Int, acc: Offset): DragPreview {
-            val dayOffset = (acc.x / colWidthPx).roundToInt()
-            val newIdx = (originIdx + dayOffset).coerceIn(0, days.size - 1)
             val raw = block.startMin + acc.y / pxPerMin
             val maxStart = (settings.dayEndMin - block.duration).coerceAtLeast(settings.dayStartMin)
-            val start = raw.coerceIn(settings.dayStartMin.toFloat(), maxStart.toFloat())
-            return DragPreview(block.id, newIdx, start, block.duration)
+            return DragPreview(
+                blockId = block.id,
+                originIdx = originIdx,
+                dxPx = acc.x.coerceIn(
+                    -(originIdx * colWidthPx),
+                    (days.size - 1 - originIdx) * colWidthPx
+                ),
+                startMin = raw.coerceIn(settings.dayStartMin.toFloat(), maxStart.toFloat()),
+                duration = block.duration
+            )
         }
 
         fun hitBlock(pos: Offset): Boolean {
@@ -409,14 +419,8 @@ private fun WeekTimeline(
                     drawLine(separator, Offset(x, 0f), Offset(x, size.height), 1.dp.toPx())
                 }
                 drag?.let { d ->
-                    val x0 = leftPx + d.dayIndex * colWidthPx
+                    val x0 = leftPx + d.targetIdx(colWidthPx, days.size) * colWidthPx
                     drawRect(highlight, Offset(x0, 0f), Size(colWidthPx, size.height))
-                    var mm = settings.dayStartMin
-                    while (mm <= settings.dayEndMin) {
-                        val y = padPx + (mm - settings.dayStartMin) * pxPerMin
-                        drawLine(dragGrid, Offset(leftPx, y), Offset(size.width, y), 1.dp.toPx())
-                        mm += 15
-                    }
                 }
             }
 
@@ -432,34 +436,78 @@ private fun WeekTimeline(
                 blocks.forEach { block ->
                     if (block.dayOfWeek == iso && block.activeInWeek(week)) {
                         val preview = drag?.takeIf { it.blockId == block.id }
-                        val targetIdx = preview?.dayIndex ?: idx
                         val start = preview?.startMin ?: block.startMin.toFloat()
                         val end = preview?.let { it.startMin + it.duration } ?: block.endMin.toFloat()
                         if (end > settings.dayStartMin && start < settings.dayEndMin) {
                             val top = TIMELINE_PAD + (start - settings.dayStartMin) * dpPerMin
                             val height = (end - start) * dpPerMin
-                            val x = LEFT_WIDTH + colWidth * targetIdx.toFloat() + 1.dp
+                            val dx = preview?.let { with(density) { it.dxPx.toDp() } } ?: 0.dp
+                            val x = LEFT_WIDTH + colWidth * idx.toFloat() + 1.dp + dx
                             val shape = RoundedCornerShape(8.dp)
 
-                            val gesture = Modifier.pointerInput(
-                                block, week, colWidthPx, pxPerMin, days.size
-                            ) {
-                                awaitEachGesture {
-                                    val down = awaitFirstDown(requireUnconsumed = false)
-                                    val longPressed = awaitLongPressOrCancellation(down.id)
-                                    if (longPressed == null) {
-                                        // 快速抬起且未被上层消费 = 点击；被消费（如横向滑动）则忽略。
-                                        val up = currentEvent.changes.firstOrNull { it.id == down.id }
-                                        if (up != null && !up.pressed && !up.isConsumed) onTapBlock(block)
-                                        return@awaitEachGesture
+                            // 两段手势：一动就拖（跟手），按住不动才弹菜单。两者互不阻塞。
+                            val gesture = Modifier
+                                .pointerInput(block, week, colWidthPx, pxPerMin, days.size) {
+                                    awaitEachGesture {
+                                        val down = awaitFirstDown(requireUnconsumed = false)
+                                        var acc = Offset.Zero
+                                        var dragging = false
+                                        var tapped = false
+                                        try {
+                                            while (true) {
+                                                val event = awaitPointerEvent()
+                                                val change =
+                                                    event.changes.firstOrNull { it.id == down.id } ?: break
+                                                if (!change.pressed) {
+                                                    tapped = !dragging && !change.isConsumed
+                                                    break
+                                                }
+                                                val delta = change.positionChange()
+                                                if (delta != Offset.Zero) {
+                                                    acc += delta
+                                                    if (!dragging && acc.getDistance() > viewConfiguration.touchSlop) {
+                                                        dragging = true
+                                                        // 从越过触摸阈值处起算，块的首帧不跳。
+                                                        acc = Offset.Zero
+                                                        onDragBlock()
+                                                    }
+                                                    if (dragging) {
+                                                        change.consume()
+                                                        drag = previewFrom(block, idx, acc)
+                                                    }
+                                                }
+                                            }
+                                            if (tapped) onTapBlock(block)
+                                        } finally {
+                                            if (dragging) {
+                                                drag?.takeIf { it.blockId == block.id }?.let { p ->
+                                                    // 拖动时不吸附，松手才吸附到 15 分钟和最近的一列。
+                                                    val snapped = snap15(p.startMin.roundToInt())
+                                                        .coerceIn(
+                                                            settings.dayStartMin,
+                                                            settings.dayEndMin - p.duration
+                                                        )
+                                                    store.upsertBlock(
+                                                        block.copy(
+                                                            dayOfWeek =
+                                                                days[p.targetIdx(colWidthPx, days.size)],
+                                                            startMin = snapped,
+                                                            endMin = snapped + p.duration
+                                                        )
+                                                    )
+                                                }
+                                            }
+                                            drag = null
+                                        }
                                     }
-
-                                    // 长按一触发就弹出菜单，不等手指抬起。
-                                    onLongPressBlock(block)
-
-                                    var acc = Offset.Zero
-                                    var moved = false
-                                    try {
+                                }
+                                .pointerInput(block, week) {
+                                    awaitEachGesture {
+                                        val down = awaitFirstDown(requireUnconsumed = false)
+                                        // 拖动会消费移动事件，长按自动作废；原地不动满时长才弹菜单。
+                                        val longPressed = awaitLongPressOrCancellation(down.id) ?: return@awaitEachGesture
+                                        onLongPressBlock(block)
+                                        // 吞掉抬起，避免同时被判成点击。
                                         while (true) {
                                             val event = awaitPointerEvent()
                                             val change = event.changes.firstOrNull { it.id == down.id } ?: break
@@ -467,38 +515,9 @@ private fun WeekTimeline(
                                                 change.consume()
                                                 break
                                             }
-                                            val delta = change.positionChange()
-                                            if (delta != Offset.Zero) {
-                                                acc += delta
-                                                change.consume()
-                                                if (!moved) onDragBlock()
-                                                moved = true
-                                                drag = previewFrom(block, idx, acc)
-                                            }
-                                            if (event.changes.none { it.pressed }) break
                                         }
-                                    } finally {
-                                        if (moved) {
-                                            drag?.takeIf { it.blockId == block.id }?.let { p ->
-                                                // 拖动过程不吸附，松手时才吸附到 15 分钟。
-                                                val snapped = snap15(p.startMin.roundToInt())
-                                                    .coerceIn(
-                                                        settings.dayStartMin,
-                                                        settings.dayEndMin - p.duration
-                                                    )
-                                                store.upsertBlock(
-                                                    block.copy(
-                                                        dayOfWeek = days[p.dayIndex],
-                                                        startMin = snapped,
-                                                        endMin = snapped + p.duration
-                                                    )
-                                                )
-                                            }
-                                        }
-                                        drag = null
                                     }
                                 }
-                            }
 
                             val bg = Color(block.color)
                             val fg = if (bg.luminance() > 0.5f) Color(0xFF2B2B33) else Color.White
