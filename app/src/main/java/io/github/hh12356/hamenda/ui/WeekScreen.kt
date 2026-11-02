@@ -91,8 +91,8 @@ private const val SWIPE_THRESHOLD_PX = 120f
 private data class DragPreview(
     val blockId: Long,
     val dayIndex: Int,
-    val startMin: Int,
-    val endMin: Int
+    val startMin: Float,
+    val duration: Int
 )
 
 private data class EditTarget(val block: CourseBlock)
@@ -322,10 +322,10 @@ private fun WeekTimeline(
         fun previewFrom(block: CourseBlock, originIdx: Int, acc: Offset): DragPreview {
             val dayOffset = (acc.x / colWidthPx).roundToInt()
             val newIdx = (originIdx + dayOffset).coerceIn(0, days.size - 1)
-            val raw = block.startMin + (acc.y / pxPerMin).toInt()
+            val raw = block.startMin + acc.y / pxPerMin
             val maxStart = (settings.dayEndMin - block.duration).coerceAtLeast(settings.dayStartMin)
-            val start = snap15(raw).coerceIn(settings.dayStartMin, maxStart)
-            return DragPreview(block.id, newIdx, start, start + block.duration)
+            val start = raw.coerceIn(settings.dayStartMin.toFloat(), maxStart.toFloat())
+            return DragPreview(block.id, newIdx, start, block.duration)
         }
 
         fun hitBlock(pos: Offset): Boolean {
@@ -418,11 +418,11 @@ private fun WeekTimeline(
                     if (block.dayOfWeek == iso && block.activeInWeek(week)) {
                         val preview = drag?.takeIf { it.blockId == block.id }
                         val targetIdx = preview?.dayIndex ?: idx
-                        val start = preview?.startMin ?: block.startMin
-                        val end = preview?.endMin ?: block.endMin
+                        val start = preview?.startMin ?: block.startMin.toFloat()
+                        val end = preview?.let { it.startMin + it.duration } ?: block.endMin.toFloat()
                         if (end > settings.dayStartMin && start < settings.dayEndMin) {
-                            val top = TIMELINE_PAD + (start - settings.dayStartMin).toFloat() * dpPerMin
-                            val height = (end - start).toFloat() * dpPerMin
+                            val top = TIMELINE_PAD + (start - settings.dayStartMin) * dpPerMin
+                            val height = (end - start) * dpPerMin
                             val x = LEFT_WIDTH + colWidth * targetIdx.toFloat() + 1.dp
                             val shape = RoundedCornerShape(8.dp)
 
@@ -461,11 +461,17 @@ private fun WeekTimeline(
                                     } finally {
                                         if (moved) {
                                             drag?.takeIf { it.blockId == block.id }?.let { p ->
+                                                // 拖动过程不吸附，松手时才吸附到 15 分钟。
+                                                val snapped = snap15(p.startMin.roundToInt())
+                                                    .coerceIn(
+                                                        settings.dayStartMin,
+                                                        settings.dayEndMin - p.duration
+                                                    )
                                                 store.upsertBlock(
                                                     block.copy(
                                                         dayOfWeek = days[p.dayIndex],
-                                                        startMin = p.startMin,
-                                                        endMin = p.endMin
+                                                        startMin = snapped,
+                                                        endMin = snapped + p.duration
                                                     )
                                                 )
                                             }
