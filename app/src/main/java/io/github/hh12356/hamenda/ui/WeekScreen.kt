@@ -219,17 +219,20 @@ private fun TopBar(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Row(Modifier.align(Alignment.CenterStart), verticalAlignment = Alignment.CenterVertically) {
-            if (settings.showWeekArrows) {
-                IconButton(onClick = onPrev) { ChevronIcon(left = true) }
-            }
+        if (settings.showWeekArrows) {
+            IconButton(
+                onClick = onPrev,
+                modifier = Modifier.align(Alignment.Center).offset(x = (-62).dp)
+            ) { ChevronIcon(left = true) }
+            IconButton(
+                onClick = onNext,
+                modifier = Modifier.align(Alignment.Center).offset(x = 62.dp)
+            ) { ChevronIcon(left = false) }
         }
-        Row(Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
-            if (settings.showWeekArrows) {
-                IconButton(onClick = onNext) { ChevronIcon(left = false) }
-            }
-            IconButton(onClick = onOpenSettings) { SlidersIcon() }
-        }
+        IconButton(
+            onClick = onOpenSettings,
+            modifier = Modifier.align(Alignment.CenterEnd)
+        ) { SlidersIcon() }
     }
 }
 
