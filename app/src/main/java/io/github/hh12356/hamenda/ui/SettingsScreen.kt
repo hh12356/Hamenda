@@ -188,6 +188,17 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
                         onCheckedChange = { v -> store.updateSettings { it.copy(showWeekArrows = v) } }
                     )
                 }
+                CardDivider()
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("显示周日期范围", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                    Switch(
+                        checked = settings.showWeekRange,
+                        onCheckedChange = { v -> store.updateSettings { it.copy(showWeekRange = v) } }
+                    )
+                }
             }
 
             SettingsCard("外观") {

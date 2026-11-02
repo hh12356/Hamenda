@@ -219,11 +219,13 @@ private fun TopBar(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text("第 $week 周", style = MaterialTheme.typography.titleLarge)
-            Text(
-                weekDateRangeLabel(settings, week),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (settings.showWeekRange) {
+                Text(
+                    weekDateRangeLabel(settings, week),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         if (settings.showWeekArrows) {
             IconButton(

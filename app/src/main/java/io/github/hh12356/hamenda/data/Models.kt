@@ -35,6 +35,7 @@ data class AppSettings(
     val dayStartMin: Int = 480,
     val dayEndMin: Int = 1320,
     val showWeekArrows: Boolean = true,
+    val showWeekRange: Boolean = false,
     val themeMode: Int = 0,           // 0=system, 1=light, 2=dark
     val leftLabelMode: Int = 0        // 0=hour, 1=period index, 2=period times
 )
