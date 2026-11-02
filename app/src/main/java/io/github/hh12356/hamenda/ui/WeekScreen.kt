@@ -397,24 +397,11 @@ private fun WeekTimeline(
                         Size(colWidthPx, size.height)
                     )
                 }
-                // 节次模式按每节课的起止时间画横线，方便对照小格。
-                val gridMinutes = if (settings.leftLabelMode == 1) {
-                    SCHOOL_PERIODS
-                        .filter { it.startMin >= settings.dayStartMin && it.endMin <= settings.dayEndMin }
-                        .flatMap { listOf(it.startMin, it.endMin) }
-                        .distinct()
-                } else {
-                    buildList {
-                        var m = ((settings.dayStartMin + 59) / 60) * 60
-                        while (m <= settings.dayEndMin) {
-                            add(m)
-                            m += 60
-                        }
-                    }
-                }
-                gridMinutes.forEach { m ->
+                // 横线跟左缘同一种分格，且一直画到左缘里，两边对得上。
+                val cells = labelCells(settings, settings.leftLabelMode)
+                (cells.map { it.startMin } + cells.map { it.endMin }).distinct().forEach { m ->
                     val y = padPx + (m - settings.dayStartMin) * pxPerMin
-                    drawLine(hourGrid, Offset(leftPx, y), Offset(size.width, y), 1.dp.toPx())
+                    drawLine(hourGrid, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
                 }
                 for (i in 0..days.size) {
                     val x = leftPx + i * colWidthPx
@@ -602,11 +589,14 @@ private fun LeftLabels(settings: AppSettings, dpPerMin: Dp, onCycle: () -> Unit)
             label = "leftLabels"
         ) { mode ->
             Box(Modifier.fillMaxSize()) {
-                buildLeftLabels(settings, mode).forEach { (minute, text) ->
-                    val y = TIMELINE_PAD + (minute - settings.dayStartMin).toFloat() * dpPerMin
+                labelCells(settings, mode).forEach { cell ->
+                    // 文字放在这一格的中间，横线才不会压到字上。
+                    val mid = TIMELINE_PAD +
+                        ((cell.startMin + cell.endMin) / 2f - settings.dayStartMin) * dpPerMin
+                    val half = if ('\n' in cell.text) 12.dp else 5.dp
                     Text(
-                        text = text,
-                        modifier = Modifier.offset(x = 6.dp, y = y - 5.dp),
+                        text = cell.text,
+                        modifier = Modifier.offset(x = 6.dp, y = mid - half),
                         style = style,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -616,23 +606,26 @@ private fun LeftLabels(settings: AppSettings, dpPerMin: Dp, onCycle: () -> Unit)
     }
 }
 
-private fun buildLeftLabels(settings: AppSettings, mode: Int): List<Pair<Int, String>> = when (mode) {
-    1 -> SCHOOL_PERIODS
-        .filter { it.startMin >= settings.dayStartMin && it.endMin <= settings.dayEndMin }
-        .map { it.startMin to "${it.index}" }
+private data class LabelCell(val startMin: Int, val endMin: Int, val text: String)
 
-    2 -> SCHOOL_PERIODS
+/** 左缘的每一格，同时也是日程表横线的来源。 */
+private fun labelCells(settings: AppSettings, mode: Int): List<LabelCell> = when (mode) {
+    1, 2 -> SCHOOL_PERIODS
         .filter { it.startMin >= settings.dayStartMin && it.endMin <= settings.dayEndMin }
-        .map { it.startMin to "${minuteLabel(it.startMin)}\n${minuteLabel(it.endMin)}" }
+        .map {
+            LabelCell(
+                it.startMin,
+                it.endMin,
+                if (mode == 1) "${it.index}" else "${minuteLabel(it.startMin)}\n${minuteLabel(it.endMin)}"
+            )
+        }
 
-    else -> {
-        val result = mutableListOf<Pair<Int, String>>()
+    else -> buildList {
         var h = ((settings.dayStartMin + 59) / 60) * 60
         while (h <= settings.dayEndMin) {
-            result += h to minuteLabel(h)
+            add(LabelCell(h, (h + 60).coerceAtMost(settings.dayEndMin), minuteLabel(h)))
             h += 60
         }
-        result
     }
 }
 
