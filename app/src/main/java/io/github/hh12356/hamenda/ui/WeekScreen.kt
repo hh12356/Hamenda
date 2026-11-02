@@ -1,9 +1,17 @@
 package io.github.hh12356.hamenda.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
@@ -525,29 +533,42 @@ private fun LeftLabels(settings: AppSettings, dpPerMin: Dp, onCycle: () -> Unit)
         Modifier
             .fillMaxHeight()
             .width(LEFT_WIDTH)
-            .clickable(onClick = onCycle)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onCycle
+            )
     ) {
-        val labels = remember(settings.leftLabelMode, settings.dayStartMin, settings.dayEndMin) {
-            buildLeftLabels(settings)
-        }
         val style = MaterialTheme.typography.labelSmall.copy(
             fontSize = 10.sp,
             lineHeight = 12.sp,
             fontFeatureSettings = "tnum"
         )
-        labels.forEach { (minute, text) ->
-            val y = TIMELINE_PAD + (minute - settings.dayStartMin).toFloat() * dpPerMin
-            Text(
-                text = text,
-                modifier = Modifier.offset(x = 6.dp, y = y - 5.dp),
-                style = style,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        AnimatedContent(
+            targetState = settings.leftLabelMode,
+            modifier = Modifier.fillMaxSize(),
+            transitionSpec = {
+                (fadeIn(tween(180)) + slideInVertically(tween(180)) { it / 40 })
+                    .togetherWith(fadeOut(tween(140)) + slideOutVertically(tween(140)) { -it / 40 })
+            },
+            label = "leftLabels"
+        ) { mode ->
+            Box(Modifier.fillMaxSize()) {
+                buildLeftLabels(settings, mode).forEach { (minute, text) ->
+                    val y = TIMELINE_PAD + (minute - settings.dayStartMin).toFloat() * dpPerMin
+                    Text(
+                        text = text,
+                        modifier = Modifier.offset(x = 6.dp, y = y - 5.dp),
+                        style = style,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 }
 
-private fun buildLeftLabels(settings: AppSettings): List<Pair<Int, String>> = when (settings.leftLabelMode) {
+private fun buildLeftLabels(settings: AppSettings, mode: Int): List<Pair<Int, String>> = when (mode) {
     1 -> SCHOOL_PERIODS
         .filter { it.startMin >= settings.dayStartMin && it.endMin <= settings.dayEndMin }
         .map { it.startMin to "${it.index}" }
