@@ -1,6 +1,7 @@
 package io.github.hh12356.hamenda.ui
 
 import android.app.DatePickerDialog
+import androidx.activity.compose.BackHandler
 import android.app.TimePickerDialog
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -8,13 +9,16 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -25,8 +29,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,17 +44,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import io.github.hh12356.hamenda.data.SCHOOL_PERIODS
 import io.github.hh12356.hamenda.data.Store
 import io.github.hh12356.hamenda.util.minuteLabel
 import java.time.LocalDate
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(store: Store, onBack: () -> Unit) {
+    BackHandler(onBack = onBack)
     val context = LocalContext.current
     val settings = store.data.settings
     var pendingImport by remember { mutableStateOf<String?>(null) }
@@ -88,48 +94,47 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
             .navigationBarsPadding()
     ) {
         Row(
-            Modifier.fillMaxWidth().height(54.dp).padding(horizontal = 4.dp),
+            Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = onBack) { Text("‹", fontSize = 24.sp) }
+            IconButton(onClick = onBack) { ChevronIcon(left = true) }
             Text(
                 "设置",
                 Modifier.weight(1f),
                 textAlign = TextAlign.Center,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 17.sp
+                style = MaterialTheme.typography.titleMedium
             )
             Spacer(Modifier.width(48.dp))
         }
-        HorizontalDivider()
 
         Column(
             Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(22.dp)
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            SettingRow(
-                title = "开学日期",
-                value = settings.semesterStart.ifBlank { "未设置" }
-            ) {
-                val initial = runCatching { LocalDate.parse(settings.semesterStart) }
-                    .getOrNull() ?: LocalDate.now()
-                DatePickerDialog(
-                    context,
-                    { _, y, m, d ->
-                        store.updateSettings { it.copy(semesterStart = LocalDate.of(y, m + 1, d).toString()) }
-                    },
-                    initial.year,
-                    initial.monthValue - 1,
-                    initial.dayOfMonth
-                ).show()
+            SettingsCard("学期") {
+                SettingRow(
+                    title = "开学日期",
+                    value = settings.semesterStart.ifBlank { "未设置" }
+                ) {
+                    val initial = runCatching { LocalDate.parse(settings.semesterStart) }
+                        .getOrNull() ?: LocalDate.now()
+                    DatePickerDialog(
+                        context,
+                        { _, y, m, d ->
+                            store.updateSettings { it.copy(semesterStart = LocalDate.of(y, m + 1, d).toString()) }
+                        },
+                        initial.year,
+                        initial.monthValue - 1,
+                        initial.dayOfMonth
+                    ).show()
+                }
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                SectionTitle("一周起始日")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SettingsCard("显示") {
+                LabeledChips("一周起始日") {
                     ToggleChip("周日", !settings.weekStartMonday) {
                         store.updateSettings { it.copy(weekStartMonday = false) }
                     }
@@ -137,11 +142,8 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
                         store.updateSettings { it.copy(weekStartMonday = true) }
                     }
                 }
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                SectionTitle("显示天数")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CardDivider()
+                LabeledChips("显示天数") {
                     ToggleChip("7 天", !settings.fiveDayMode) {
                         store.updateSettings { it.copy(fiveDayMode = false) }
                     }
@@ -149,47 +151,48 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
                         store.updateSettings { it.copy(fiveDayMode = true) }
                     }
                 }
+                CardDivider()
+                SettingRow("每日范围开始", minuteLabel(settings.dayStartMin)) {
+                    TimePickerDialog(
+                        context,
+                        { _, h, m ->
+                            store.updateSettings { s ->
+                                s.copy(dayStartMin = (h * 60 + m).coerceAtMost(s.dayEndMin - 60))
+                            }
+                        },
+                        settings.dayStartMin / 60,
+                        settings.dayStartMin % 60,
+                        true
+                    ).show()
+                }
+                SettingRow("每日范围结束", minuteLabel(settings.dayEndMin)) {
+                    TimePickerDialog(
+                        context,
+                        { _, h, m ->
+                            store.updateSettings { s ->
+                                s.copy(dayEndMin = (h * 60 + m).coerceAtLeast(s.dayStartMin + 60))
+                            }
+                        },
+                        settings.dayEndMin / 60,
+                        settings.dayEndMin % 60,
+                        true
+                    ).show()
+                }
+                CardDivider()
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("显示左右箭头", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                    Switch(
+                        checked = settings.showWeekArrows,
+                        onCheckedChange = { v -> store.updateSettings { it.copy(showWeekArrows = v) } }
+                    )
+                }
             }
 
-            SettingRow("每日范围开始", minuteLabel(settings.dayStartMin)) {
-                TimePickerDialog(
-                    context,
-                    { _, h, m ->
-                        store.updateSettings { s ->
-                            s.copy(dayStartMin = (h * 60 + m).coerceAtMost(s.dayEndMin - 60))
-                        }
-                    },
-                    settings.dayStartMin / 60,
-                    settings.dayStartMin % 60,
-                    true
-                ).show()
-            }
-
-            SettingRow("每日范围结束", minuteLabel(settings.dayEndMin)) {
-                TimePickerDialog(
-                    context,
-                    { _, h, m ->
-                        store.updateSettings { s ->
-                            s.copy(dayEndMin = (h * 60 + m).coerceAtLeast(s.dayStartMin + 60))
-                        }
-                    },
-                    settings.dayEndMin / 60,
-                    settings.dayEndMin % 60,
-                    true
-                ).show()
-            }
-
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("显示左右箭头", Modifier.weight(1f), fontSize = 15.sp)
-                Switch(
-                    checked = settings.showWeekArrows,
-                    onCheckedChange = { v -> store.updateSettings { it.copy(showWeekArrows = v) } }
-                )
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                SectionTitle("主题")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SettingsCard("外观") {
+                LabeledChips("主题") {
                     ToggleChip("跟随系统", settings.themeMode == 0) {
                         store.updateSettings { it.copy(themeMode = 0) }
                     }
@@ -202,30 +205,45 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
                 }
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                SectionTitle("作息时间（只读）")
+            SettingsCard("作息时间（只读）") {
                 SCHOOL_PERIODS.forEach { p ->
-                    Text(
-                        "第 ${p.index} 节　${minuteLabel(p.startMin)} – ${minuteLabel(p.endMin)}",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                        Text(
+                            "第 ${p.index} 节",
+                            Modifier.width(64.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "${minuteLabel(p.startMin)} – ${minuteLabel(p.endMin)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                SectionTitle("备份")
-                Button(onClick = { exportLauncher.launch("hamenda-backup.json") }, Modifier.fillMaxWidth()) {
-                    Text("导出备份")
-                }
-                OutlinedButton(onClick = { importLauncher.launch(arrayOf("*/*")) }, Modifier.fillMaxWidth()) {
-                    Text("导入备份")
-                }
+            SettingsCard("备份") {
+                Button(
+                    onClick = { exportLauncher.launch("hamenda-backup.json") },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("导出备份") }
+                OutlinedButton(
+                    onClick = { importLauncher.launch(arrayOf("*/*")) },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("导入备份") }
+                Text(
+                    "导入会覆盖当前所有课程和设置",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
             Text(
                 "Hamenda 0.1.0 · 数据仅保存在本机",
-                fontSize = 11.sp,
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center
@@ -236,6 +254,7 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
     pendingImport?.let { text ->
         AlertDialog(
             onDismissRequest = { pendingImport = null },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             title = { Text("导入备份") },
             text = { Text("导入会覆盖当前所有课程和设置，确定继续吗？") },
             confirmButton = {
@@ -243,7 +262,7 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
                     val ok = store.importJson(text)
                     pendingImport = null
                     Toast.makeText(context, if (ok) "导入成功" else "文件格式无效", Toast.LENGTH_SHORT).show()
-                }) { Text("覆盖导入") }
+                }) { Text("覆盖导入", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { pendingImport = null }) { Text("取消") }
@@ -253,13 +272,44 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
 }
 
 @Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.Medium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
+private fun SettingsCard(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            title,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp)
+        )
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                content = content
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun LabeledChips(label: String, content: @Composable androidx.compose.foundation.layout.FlowRowScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(label, style = MaterialTheme.typography.bodyLarge)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            content = content
+        )
+    }
+}
+
+@Composable
+private fun CardDivider() {
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
 }
 
 @Composable
@@ -267,33 +317,18 @@ private fun SettingRow(title: String, value: String, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .clickable(onClick = onClick)
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(title, Modifier.weight(1f), fontSize = 15.sp)
-        Text(value, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text("  ›", fontSize = 16.sp, color = MaterialTheme.colorScheme.outline)
-    }
-}
-
-@Composable
-private fun ToggleChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .background(
-                if (selected) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.surfaceVariant,
-                RoundedCornerShape(8.dp)
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp)
-    ) {
+        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
         Text(
-            label,
-            fontSize = 13.sp,
-            color = if (selected) MaterialTheme.colorScheme.onPrimary
-            else MaterialTheme.colorScheme.onSurfaceVariant
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        Spacer(Modifier.width(6.dp))
+        ChevronIcon(left = false, tint = MaterialTheme.colorScheme.outline)
     }
 }

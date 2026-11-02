@@ -1,5 +1,6 @@
 package io.github.hh12356.hamenda.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,9 +23,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -40,7 +45,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import io.github.hh12356.hamenda.data.CourseBlock
 import io.github.hh12356.hamenda.data.DEFAULT_COLORS
 import io.github.hh12356.hamenda.data.SCHOOL_PERIODS
@@ -52,6 +56,7 @@ import io.github.hh12356.hamenda.util.periodsInRange
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun EditScreen(initial: CourseBlock, onCancel: () -> Unit, onSave: (CourseBlock) -> Unit) {
+    BackHandler(onBack = onCancel)
     var name by remember { mutableStateOf(initial.name) }
     var teacher by remember { mutableStateOf(initial.teacher) }
     var location by remember { mutableStateOf(initial.location) }
@@ -61,6 +66,7 @@ fun EditScreen(initial: CourseBlock, onCancel: () -> Unit, onSave: (CourseBlock)
     var startText by remember { mutableStateOf(minuteLabel(initial.startMin)) }
     var endText by remember { mutableStateOf(minuteLabel(initial.endMin)) }
     var showNameError by remember { mutableStateOf(false) }
+    var showTimeError by remember { mutableStateOf(false) }
     val weeks = remember { mutableStateListOf<Int>().apply { addAll(initial.startWeek..initial.endWeek) } }
     val periods = remember { mutableStateListOf<Int>().apply { addAll(periodsInRange(initial.startMin, initial.endMin)) } }
 
@@ -71,6 +77,7 @@ fun EditScreen(initial: CourseBlock, onCancel: () -> Unit, onSave: (CourseBlock)
         val last = SCHOOL_PERIODS.first { it.index == sel.last() }
         startText = minuteLabel(first.startMin)
         endText = minuteLabel(last.endMin)
+        showTimeError = false
     }
 
     Column(
@@ -81,51 +88,58 @@ fun EditScreen(initial: CourseBlock, onCancel: () -> Unit, onSave: (CourseBlock)
             .navigationBarsPadding()
     ) {
         Row(
-            Modifier.fillMaxWidth().height(54.dp).padding(horizontal = 8.dp),
+            Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = onCancel) { Text("取消") }
+            TextButton(onClick = onCancel) { Text("取消", color = MaterialTheme.colorScheme.onSurfaceVariant) }
             Text(
                 if (initial.name.isBlank()) "新建课程" else "编辑课程",
                 Modifier.weight(1f),
                 textAlign = TextAlign.Center,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 17.sp
+                style = MaterialTheme.typography.titleMedium
             )
-            TextButton(onClick = {
-                if (name.isBlank()) {
-                    showNameError = true
-                    return@TextButton
-                }
-                val start = parseTime(startText) ?: initial.startMin
-                val rawEnd = parseTime(endText) ?: initial.endMin
-                val end = if (rawEnd <= start) start + 45 else rawEnd
-                onSave(
-                    initial.copy(
-                        name = name.trim(),
-                        teacher = teacher.trim(),
-                        location = location.trim(),
-                        dayOfWeek = day,
-                        startMin = start,
-                        endMin = end,
-                        startWeek = weeks.minOrNull() ?: initial.startWeek,
-                        endWeek = weeks.maxOrNull() ?: initial.endWeek,
-                        parity = parity,
-                        color = color
+            Button(
+                onClick = {
+                    if (name.isBlank()) {
+                        showNameError = true
+                        return@Button
+                    }
+                    val start = parseTime(startText)
+                    val end = parseTime(endText)
+                    if (start == null || end == null || end <= start) {
+                        showTimeError = true
+                        return@Button
+                    }
+                    onSave(
+                        initial.copy(
+                            name = name.trim(),
+                            teacher = teacher.trim(),
+                            location = location.trim(),
+                            dayOfWeek = day,
+                            startMin = start,
+                            endMin = end,
+                            startWeek = weeks.minOrNull() ?: initial.startWeek,
+                            endWeek = weeks.maxOrNull() ?: initial.endWeek,
+                            parity = parity,
+                            color = color
+                        )
                     )
-                )
-            }) { Text("保存", fontWeight = FontWeight.SemiBold) }
+                },
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                modifier = Modifier.height(36.dp)
+            ) { Text("保存", style = MaterialTheme.typography.labelLarge) }
         }
-        HorizontalDivider()
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
 
         Column(
             Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+                .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Section("背景色") {
+            SectionCard("颜色") {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -134,7 +148,7 @@ fun EditScreen(initial: CourseBlock, onCancel: () -> Unit, onSave: (CourseBlock)
                         val selected = c == color
                         Box(
                             Modifier
-                                .size(32.dp)
+                                .size(30.dp)
                                 .clip(CircleShape)
                                 .background(Color(c))
                                 .border(
@@ -143,13 +157,23 @@ fun EditScreen(initial: CourseBlock, onCancel: () -> Unit, onSave: (CourseBlock)
                                     else MaterialTheme.colorScheme.outlineVariant,
                                     shape = CircleShape
                                 )
-                                .clickable { color = c }
-                        )
+                                .clickable { color = c },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (selected) {
+                                Box(
+                                    Modifier
+                                        .size(7.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF2B2B33))
+                                )
+                            }
+                        }
                     }
                 }
             }
 
-            Section("基本信息") {
+            SectionCard("课程信息") {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it; showNameError = false },
@@ -157,6 +181,7 @@ fun EditScreen(initial: CourseBlock, onCancel: () -> Unit, onSave: (CourseBlock)
                     label = { Text("课程名") },
                     singleLine = true,
                     isError = showNameError,
+                    shape = RoundedCornerShape(12.dp),
                     supportingText = if (showNameError) {
                         { Text("请输入课程名") }
                     } else null
@@ -166,46 +191,54 @@ fun EditScreen(initial: CourseBlock, onCancel: () -> Unit, onSave: (CourseBlock)
                     onValueChange = { teacher = it },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("老师") },
-                    singleLine = true
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
                 )
                 OutlinedTextField(
                     value = location,
                     onValueChange = { location = it },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("地点") },
-                    singleLine = true
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
                         value = startText,
-                        onValueChange = { startText = it },
+                        onValueChange = { startText = it; showTimeError = false },
                         modifier = Modifier.weight(1f),
                         label = { Text("开始") },
-                        singleLine = true
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        isError = showTimeError
                     )
                     OutlinedTextField(
                         value = endText,
-                        onValueChange = { endText = it },
+                        onValueChange = { endText = it; showTimeError = false },
                         modifier = Modifier.weight(1f),
                         label = { Text("结束") },
-                        singleLine = true
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        isError = showTimeError
                     )
                 }
                 Text(
-                    "时间格式 HH:mm，例：8:00",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    if (showTimeError) "格式为 HH:mm（如 8:00），且结束时间要晚于开始时间"
+                    else "格式 HH:mm，如 8:00",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (showTimeError) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            Section("周数") {
+            SectionCard("上课周次") {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     (1..25).forEach { w ->
-                        BoxChip(
-                            text = "$w",
+                        ToggleChip(
+                            label = "$w",
                             selected = w in weeks,
                             onClick = { if (w in weeks) weeks.remove(w) else weeks.add(w) }
                         )
@@ -213,19 +246,24 @@ fun EditScreen(initial: CourseBlock, onCancel: () -> Unit, onSave: (CourseBlock)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("每周" to 0, "单周" to 1, "双周" to 2).forEach { (label, v) ->
-                        BoxChip(text = label, selected = parity == v, wide = true) { parity = v }
+                        ToggleChip(
+                            label = label,
+                            selected = parity == v,
+                            modifier = Modifier.weight(1f),
+                            onClick = { parity = v }
+                        )
                     }
                 }
             }
 
-            Section("节数") {
+            SectionCard("节数") {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     (1..13).forEach { p ->
-                        BoxChip(
-                            text = "$p",
+                        ToggleChip(
+                            label = "$p",
                             selected = p in periods,
                             onClick = {
                                 if (p in periods) periods.remove(p) else periods.add(p)
@@ -234,12 +272,22 @@ fun EditScreen(initial: CourseBlock, onCancel: () -> Unit, onSave: (CourseBlock)
                         )
                     }
                 }
+                Text(
+                    "勾选节数会自动换算上下课时间，也可在上方手动微调",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
-            Section("星期") {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SectionCard("星期") {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     (1..7).forEach { iso ->
-                        BoxChip(text = dayName(iso), selected = day == iso, wide = true) { day = iso }
+                        ToggleChip(
+                            label = dayName(iso),
+                            selected = day == iso,
+                            modifier = Modifier.weight(1f),
+                            onClick = { day = iso }
+                        )
                     }
                 }
             }
@@ -248,42 +296,24 @@ fun EditScreen(initial: CourseBlock, onCancel: () -> Unit, onSave: (CourseBlock)
 }
 
 @Composable
-private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+private fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             title,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp)
         )
-        content()
-    }
-}
-
-@Composable
-private fun BoxChip(
-    text: String,
-    selected: Boolean,
-    wide: Boolean = false,
-    onClick: () -> Unit
-) {
-    Box(
-        Modifier
-            .then(if (wide) Modifier.height(34.dp) else Modifier.size(34.dp))
-            .background(
-                if (selected) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.surfaceVariant,
-                RoundedCornerShape(8.dp)
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                content = content
             )
-            .clickable(onClick = onClick)
-            .padding(horizontal = if (wide) 12.dp else 0.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text,
-            fontSize = 12.sp,
-            color = if (selected) MaterialTheme.colorScheme.onPrimary
-            else MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        }
     }
 }
