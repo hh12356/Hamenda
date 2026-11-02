@@ -4,8 +4,8 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -583,8 +583,8 @@ private fun LeftLabels(settings: AppSettings, dpPerMin: Dp, onCycle: () -> Unit)
             targetState = settings.leftLabelMode,
             modifier = Modifier.fillMaxSize(),
             transitionSpec = {
-                (fadeIn(tween(180)) + slideInVertically(tween(180)) { it / 40 })
-                    .togetherWith(fadeOut(tween(140)) + slideOutVertically(tween(140)) { -it / 40 })
+                (fadeIn(tween(180)) + slideInHorizontally(tween(180)) { it / 3 })
+                    .togetherWith(fadeOut(tween(140)) + slideOutHorizontally(tween(140)) { -it / 3 })
             },
             label = "leftLabels"
         ) { mode ->
