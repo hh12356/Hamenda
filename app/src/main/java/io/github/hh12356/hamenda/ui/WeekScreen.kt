@@ -194,7 +194,7 @@ fun WeekScreen(store: Store, onOpenSettings: () -> Unit) {
             block = block,
             onDismiss = { menuBlock = null },
             onEdit = { menuBlock = null; editTarget = EditTarget(block) },
-            onDeleteThis = { menuBlock = null; store.deleteBlock(block.id) },
+            onDeleteThis = { menuBlock = null; store.skipWeek(block, week) },
             onDeleteCourse = { menuBlock = null; store.deleteByName(block.name) }
         )
     }
@@ -663,7 +663,7 @@ private fun CourseMenuDialog(
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                 MenuItemText("编辑", onEdit)
-                MenuItemText("删除这节课", onDeleteThis, danger = true)
+                MenuItemText("删除本周这节课", onDeleteThis, danger = true)
                 MenuItemText("删除这门课", onDeleteCourse, danger = true)
             }
         }

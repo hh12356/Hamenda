@@ -14,12 +14,13 @@ data class CourseBlock(
     val startWeek: Int = 1,
     val endWeek: Int = 25,
     val parity: Int = 0,           // 0=every, 1=odd, 2=even
-    val color: Int = DEFAULT_COLORS[0]
+    val color: Int = DEFAULT_COLORS[0],
+    val skippedWeeks: List<Int> = emptyList()  // 只删掉某几周的那一节
 ) {
     val duration: Int get() = endMin - startMin
 
     fun activeInWeek(week: Int): Boolean =
-        week in startWeek..endWeek && when (parity) {
+        week in startWeek..endWeek && week !in skippedWeeks && when (parity) {
             1 -> week % 2 == 1
             2 -> week % 2 == 0
             else -> true

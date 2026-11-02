@@ -55,6 +55,10 @@ class Store(private val context: Context) {
 
     fun deleteBlock(id: Long) = update { d -> d.copy(blocks = d.blocks.filterNot { it.id == id }) }
 
+    /** 只删这一周的这一节，其他周不动。 */
+    fun skipWeek(block: CourseBlock, week: Int) =
+        upsertBlock(block.copy(skippedWeeks = block.skippedWeeks + week))
+
     fun deleteByName(name: String) = update { d -> d.copy(blocks = d.blocks.filterNot { it.name == name }) }
 
     fun exportJson(): String = json.encodeToString(data)
