@@ -141,7 +141,8 @@ fun WeekScreen(store: Store, onOpenSettings: () -> Unit) {
                     )
                 },
                 onTapBlock = { detailBlock = it },
-                onLongPressBlock = { menuBlock = it }
+                onLongPressBlock = { menuBlock = it },
+                onDragBlock = { menuBlock = null }
             )
         }
 
@@ -296,7 +297,8 @@ private fun WeekTimeline(
     onChangeWeek: (Int) -> Unit,
     onCreate: (Int, Int) -> Unit,
     onTapBlock: (CourseBlock) -> Unit,
-    onLongPressBlock: (CourseBlock) -> Unit
+    onLongPressBlock: (CourseBlock) -> Unit,
+    onDragBlock: () -> Unit
 ) {
     val days = remember(settings.fiveDayMode, settings.weekStartMonday) { daysOf(settings) }
     val blocks = store.data.blocks
@@ -452,6 +454,9 @@ private fun WeekTimeline(
                                         return@awaitEachGesture
                                     }
 
+                                    // 长按一触发就弹出菜单，不等手指抬起。
+                                    onLongPressBlock(block)
+
                                     var acc = Offset.Zero
                                     var moved = false
                                     try {
@@ -466,6 +471,7 @@ private fun WeekTimeline(
                                             if (delta != Offset.Zero) {
                                                 acc += delta
                                                 change.consume()
+                                                if (!moved) onDragBlock()
                                                 moved = true
                                                 drag = previewFrom(block, idx, acc)
                                             }
@@ -491,7 +497,6 @@ private fun WeekTimeline(
                                         }
                                         drag = null
                                     }
-                                    if (!moved) onLongPressBlock(block)
                                 }
                             }
 
