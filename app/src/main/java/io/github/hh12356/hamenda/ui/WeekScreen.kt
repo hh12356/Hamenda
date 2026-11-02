@@ -383,11 +383,24 @@ private fun WeekTimeline(
                         Size(colWidthPx, size.height)
                     )
                 }
-                var m = ((settings.dayStartMin + 59) / 60) * 60
-                while (m <= settings.dayEndMin) {
+                // 节次模式按每节课的起止时间画横线，方便对照小格。
+                val gridMinutes = if (settings.leftLabelMode == 1) {
+                    SCHOOL_PERIODS
+                        .filter { it.startMin >= settings.dayStartMin && it.endMin <= settings.dayEndMin }
+                        .flatMap { listOf(it.startMin, it.endMin) }
+                        .distinct()
+                } else {
+                    buildList {
+                        var m = ((settings.dayStartMin + 59) / 60) * 60
+                        while (m <= settings.dayEndMin) {
+                            add(m)
+                            m += 60
+                        }
+                    }
+                }
+                gridMinutes.forEach { m ->
                     val y = padPx + (m - settings.dayStartMin) * pxPerMin
                     drawLine(hourGrid, Offset(leftPx, y), Offset(size.width, y), 1.dp.toPx())
-                    m += 60
                 }
                 for (i in 0..days.size) {
                     val x = leftPx + i * colWidthPx
