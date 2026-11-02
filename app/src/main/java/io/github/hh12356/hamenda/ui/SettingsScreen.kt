@@ -46,7 +46,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import io.github.hh12356.hamenda.data.SCHOOL_PERIODS
 import io.github.hh12356.hamenda.data.Store
 import io.github.hh12356.hamenda.util.minuteLabel
 import java.time.LocalDate
@@ -201,24 +200,6 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
                     }
                     ToggleChip("深色", settings.themeMode == 2) {
                         store.updateSettings { it.copy(themeMode = 2) }
-                    }
-                }
-            }
-
-            SettingsCard("作息时间（只读）") {
-                SCHOOL_PERIODS.forEach { p ->
-                    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-                        Text(
-                            "第 ${p.index} 节",
-                            Modifier.width(64.dp),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            "${minuteLabel(p.startMin)} – ${minuteLabel(p.endMin)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
                 }
             }
