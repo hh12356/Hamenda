@@ -42,7 +42,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -51,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import io.github.hh12356.hamenda.data.CourseBlock
 import io.github.hh12356.hamenda.data.Store
 import io.github.hh12356.hamenda.data.parseHamDb
+import io.github.hh12356.hamenda.data.parseInstalledHam
 import io.github.hh12356.hamenda.util.minuteLabel
 import java.io.File
 import java.time.LocalDate
@@ -64,6 +69,7 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
     var pendingImport by remember { mutableStateOf<String?>(null) }
     var pendingHam by remember { mutableStateOf<List<CourseBlock>?>(null) }
     var clearStep by remember { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
 
     val hamLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -270,12 +276,27 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
 
             SettingsCard("从 Ham 导入") {
                 OutlinedButton(
-                    onClick = { hamLauncher.launch(arrayOf("*/*")) },
+                    onClick = {
+                        scope.launch {
+                            // 先自动找已装的 Ham；没有 root 读不到时退回手动选文件。
+                            val blocks = withContext(Dispatchers.IO) { parseInstalledHam(context) }
+                            if (blocks == null) {
+                                Toast.makeText(
+                                    context,
+                                    "没有 root 权限读不到 Ham 的数据，请手动选择 ham.db",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                                hamLauncher.launch(arrayOf("*/*"))
+                            } else {
+                                pendingHam = blocks
+                            }
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                     shape = RoundedCornerShape(12.dp)
-                ) { Text("选择 ham.db") }
+                ) { Text("从 Ham 导入") }
                 Text(
-                    "课程会追加到现有课表，不覆盖已有课程",
+                    "会自动查找手机里的 Ham 课表；读不到时让你手动选 ham.db。课程追加到现有课表",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

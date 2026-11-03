@@ -1,7 +1,38 @@
 package io.github.hh12356.hamenda.data
 
+import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.graphics.Color
+import java.io.File
+
+/** Ham 的数据库路径；别人的私有目录普通应用读不到，只有 root 能拷。 */
+private const val HAM_DB = "/data/data/com.nowcent.ham/databases/ham.db"
+
+/**
+ * 直接去手机里找已安装 Ham 的课表，找不到（没 root）返回 null，由界面退回手动选文件。
+ */
+fun parseInstalledHam(context: Context): List<CourseBlock>? {
+    val cache = File(context.cacheDir, "ham-import.db")
+    fun cleanup() = listOf("", "-wal", "-shm").forEach { File(cache.path + it).delete() }
+    cleanup()
+    // Magisk 之类会把 su 放进 PATH；没进 PATH 的设备再试几个绝对路径。
+    val su = listOf("su", "/system/bin/su", "/sbin/su", "/system/xbin/su").firstOrNull { exe ->
+        runCatching {
+            ProcessBuilder(exe, "-c", "cp $HAM_DB ${cache.absolutePath}").start().waitFor() == 0 &&
+                cache.length() > 0
+        }.getOrDefault(false)
+    }
+    val copied = su != null
+    if (copied) {
+        // 带上 WAL，Ham 还在跑时最新数据可能还没写进主库。
+        runCatching {
+            ProcessBuilder(su, "-c", "cp $HAM_DB-wal ${cache.absolutePath}-wal").start().waitFor()
+        }
+    }
+    val blocks = if (copied) parseHamDb(cache.absolutePath) else null
+    cleanup()
+    return blocks
+}
 
 /**
  * 读 Ham（com.nowcent.ham）的 ham.db，转成课程块。
