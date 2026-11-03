@@ -69,6 +69,7 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
     var pendingImport by remember { mutableStateOf<String?>(null) }
     var pendingHam by remember { mutableStateOf<List<CourseBlock>?>(null) }
     var clearStep by remember { mutableIntStateOf(0) }
+    var showHamHelp by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     val hamLauncher = rememberLauncherForActivityResult(
@@ -281,12 +282,7 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
                             // 先自动找已装的 Ham；没有 root 读不到时退回手动选文件。
                             val blocks = withContext(Dispatchers.IO) { parseInstalledHam(context) }
                             if (blocks == null) {
-                                Toast.makeText(
-                                    context,
-                                    "没有 root 权限读不到 Ham 的数据，请手动选择 ham.db",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                                hamLauncher.launch(arrayOf("*/*"))
+                                showHamHelp = true
                             } else {
                                 pendingHam = blocks
                             }
@@ -310,6 +306,30 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
                 textAlign = TextAlign.Center
             )
         }
+    }
+
+    if (showHamHelp) {
+        AlertDialog(
+            onDismissRequest = { showHamHelp = false },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            title = { Text("无法自动读取 Ham") },
+            text = {
+                Text(
+                    "安卓不允许一个应用读另一个应用的私有数据，Ham 的课表就存在那里。" +
+                        "要么手机已 root，要么用数据线连电脑用 adb 把 ham.db 拉出来，" +
+                        "拿到文件后再导入。"
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showHamHelp = false
+                    hamLauncher.launch(arrayOf("*/*"))
+                }) { Text("选择文件") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showHamHelp = false }) { Text("取消") }
+            }
+        )
     }
 
     // 清空课程要连点两次确认，避免误触。
