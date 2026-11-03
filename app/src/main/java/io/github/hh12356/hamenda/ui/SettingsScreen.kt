@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -51,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import io.github.hh12356.hamenda.BuildConfig
 import io.github.hh12356.hamenda.data.CourseBlock
 import io.github.hh12356.hamenda.data.Store
+import io.github.hh12356.hamenda.ui.theme.ACCENTS
 import io.github.hh12356.hamenda.util.minuteLabel
 import java.time.LocalDate
 
@@ -218,6 +220,23 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
                     }
                     ToggleChip("深色", settings.themeMode == 2) {
                         store.updateSettings { it.copy(themeMode = 2) }
+                    }
+                }
+                CardDivider()
+                val dark = when (settings.themeMode) {
+                    1 -> false
+                    2 -> true
+                    else -> isSystemInDarkTheme()
+                }
+                LabeledChips("主题色") {
+                    ACCENTS.forEachIndexed { i, accent ->
+                        ToggleChip(
+                            label = accent.name,
+                            selected = settings.accent == i,
+                            dot = if (dark) accent.darkPrimary else accent.lightPrimary
+                        ) {
+                            store.updateSettings { it.copy(accent = i) }
+                        }
                     }
                 }
             }

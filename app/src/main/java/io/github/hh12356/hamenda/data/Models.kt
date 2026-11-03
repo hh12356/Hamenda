@@ -58,6 +58,7 @@ data class AppSettings(
     val showWeekArrows: Boolean = true,
     val showWeekRange: Boolean = false,
     val themeMode: Int = 0,           // 0=system, 1=light, 2=dark
+    val accent: Int = 0,              // 主题色，下标见 ui/theme/Theme.kt 的 ACCENTS
     val leftLabelMode: Int = 0        // 0=hour, 1=period index, 2=period times
 )
 

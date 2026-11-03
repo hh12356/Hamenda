@@ -28,7 +28,10 @@ class MainActivity : ComponentActivity() {
 private fun App() {
     val context = LocalContext.current
     val store = remember { Store(context) }
-    HamendaTheme(mode = store.data.settings.themeMode) {
+    HamendaTheme(
+        mode = store.data.settings.themeMode,
+        accent = store.data.settings.accent
+    ) {
         var showSettings by remember { mutableStateOf(false) }
         Surface(Modifier.fillMaxSize()) {
             if (showSettings) {

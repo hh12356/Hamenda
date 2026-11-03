@@ -277,24 +277,19 @@ private fun DayHeaderRow(settings: AppSettings, week: Int, today: LocalDate) {
                     fontWeight = if (isToday) FontWeight.SemiBold else FontWeight.Medium
                 )
                 Spacer(Modifier.height(3.dp))
-                if (isToday) {
-                    Box(
-                        Modifier
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary)
-                            .padding(horizontal = 7.dp, vertical = 1.dp)
-                    ) {
-                        Text(
-                            "${date.dayOfMonth}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
-                } else {
+                // 两种情况必须一样高，否则切到有今天的那周时表头多出 2dp，
+                // 整张课表被重新缩放，左右滑动看着会抖。
+                Box(
+                    Modifier
+                        .clip(CircleShape)
+                        .background(if (isToday) MaterialTheme.colorScheme.primary else Color.Transparent)
+                        .padding(horizontal = 7.dp, vertical = 1.dp)
+                ) {
                     Text(
-                        "${date.monthValue}/${date.dayOfMonth}",
+                        if (isToday) "${date.dayOfMonth}" else "${date.monthValue}/${date.dayOfMonth}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline
+                        color = if (isToday) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.outline
                     )
                 }
             }

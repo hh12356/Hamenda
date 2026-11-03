@@ -4,15 +4,20 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -24,6 +29,7 @@ fun ToggleChip(
     selected: Boolean,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
+    dot: Color? = null,
     onClick: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
@@ -38,13 +44,25 @@ fun ToggleChip(
             .padding(horizontal = if (compact) 4.dp else 12.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelMedium,
-            color = if (selected) colors.onPrimary else colors.onSurfaceVariant,
-            maxLines = 1,
-            softWrap = false
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // 选中时整块底色就是它自己的颜色，圆点留着占位但不画，避免宽度跳一下。
+            if (dot != null) {
+                Box(
+                    Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(if (selected) Color.Transparent else dot)
+                )
+                Spacer(Modifier.width(6.dp))
+            }
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = if (selected) colors.onPrimary else colors.onSurfaceVariant,
+                maxLines = 1,
+                softWrap = false
+            )
+        }
     }
 }
 
