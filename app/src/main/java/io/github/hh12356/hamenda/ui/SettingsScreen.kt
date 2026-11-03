@@ -221,6 +221,19 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
                 }
             }
 
+            SettingsCard("从教务系统导入") {
+                OutlinedButton(
+                    onClick = { showJw = true },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("登录教务系统") }
+                Text(
+                    "登录后自动取本学期课表并追加到现有课表；密码只在教务页面里输入，应用不保存",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
             SettingsCard("备份") {
                 Button(
                     onClick = { exportLauncher.launch("hamenda-backup.json") },
@@ -245,19 +258,6 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
                         contentColor = MaterialTheme.colorScheme.error
                     )
                 ) { Text("清空所有课程") }
-            }
-
-            SettingsCard("从教务系统导入") {
-                OutlinedButton(
-                    onClick = { showJw = true },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) { Text("登录教务系统") }
-                Text(
-                    "登录后自动取本学期课表并追加到现有课表；密码只在教务页面里输入，应用不保存",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
 
             Text(
