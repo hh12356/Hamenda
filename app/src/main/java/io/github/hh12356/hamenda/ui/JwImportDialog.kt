@@ -62,6 +62,7 @@ fun JwImportDialog(
     var error by remember { mutableStateOf<String?>(null) }
     // 卡住时至少能看出停在哪一步。
     var pageUrl by remember { mutableStateOf("") }
+    var debug by remember { mutableStateOf("") }
     val termLabel = remember {
         "$xnm-${xnm.toInt() + 1} 学年 · " + if (xqm == "3") "第一学期" else "第二学期"
     }
@@ -93,6 +94,12 @@ fun JwImportDialog(
         val tried = mutableSetOf<String>()
         var lastUrl = ""
         val bridge = object {
+            // 手机上取不到 logcat，取课表的过程实测只能靠这行显示出来。
+            @JavascriptInterface
+            fun onDebug(text: String) {
+                Handler(Looper.getMainLooper()).post { debug = text }
+            }
+
             @JavascriptInterface
             fun onTimetable(json: String) {
                 Handler(Looper.getMainLooper()).post {
@@ -118,7 +125,7 @@ fun JwImportDialog(
                 pageUrl = url.substringAfter("://")
                 if (url.contains("login_slogin") || !tried.add(url)) return
                 if (url.startsWith("https://jwgl.whu.edu.cn/")) {
-                    view.evaluateJavascript(fetchJs(zfTermBody(xnm, xqm)), null)
+                    view.evaluateJavascript(fetchJs(xnm, xqm), null)
                 }
                 // 学校移动版页面按 100vh 排版，而 WebView 里 100vh 会算成 0，
                 // 整块内容被 overflow 裁掉显示成白屏；改成按内容撑开。
@@ -173,6 +180,15 @@ fun JwImportDialog(
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
+                        if (debug.isNotEmpty()) {
+                            Text(
+                                debug,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                     TextButton(onClick = onDismiss) { Text("取消") }
                 }
@@ -190,23 +206,71 @@ fun JwImportDialog(
     }
 }
 
-// 多因子页的 .mobile-page-center-box 高度是 calc(100vh - 44px)，100vh 为 0 时高度变 0，
-// 配合 overflow:hidden 正好把整页内容裁掉，所以只改这两条。
-private const val FIX_VH_JS = """(function(){var s=document.createElement('style');
-s.textContent='.mobile-page-center-box{height:auto!important}'+
-'.mobile-page-content-box{max-height:none!important;overflow:visible!important}';
-document.head.appendChild(s);})()"""
+// 学校页面用 100vh 排版，而 WebView 里 100vh 会算成 0：容器高度变 0、内容被裁成白屏，
+// 弹窗也因为居中在 0 高度盒子里被顶到最上面。这里把塌掉的容器改回按内容撑开。
+private const val FIX_VH_JS = """(function(){
+  if (window.__hamendaFix) return;
+  window.__hamendaFix = true;
+  var s = document.createElement('style');
+  s.textContent = '.mobile-page-center-box{height:auto!important}' +
+    '.mobile-page-content-box{max-height:none!important;overflow:visible!important}';
+  document.head.appendChild(s);
+  function fix() {
+    var els = document.querySelectorAll('div,section,form,main');
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i], cs = getComputedStyle(el);
+      if (cs.height === '0px' && el.children.length &&
+          (cs.overflow === 'hidden' || cs.overflowY === 'hidden' || cs.display === 'flex')) {
+        el.style.setProperty('height', 'auto', 'important');
+      }
+    }
+  }
+  var pending = false;
+  function schedule() {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(function () { pending = false; fix(); });
+  }
+  fix();
+  // 多因素、信任设备这些弹窗是登录后才插进 DOM 的，得盯着变化再修一次。
+  new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
+})()"""
 
-private fun fetchJs(body: String) = """
-    fetch('/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151', {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
+// 学年/学期的代码各校不一样（正方常用 3/12，也有 1/2），所以先读课表页自己的默认值，
+// 再按候选依次试，取第一个真的带回课程的响应。
+private fun fetchJs(xnm: String, xqm: String): String {
+    val candidates = listOf(xqm, "3", "12", "1", "2").distinct()
+        .joinToString(",") { "'xnm=$xnm&xqm=$it'" }
+    return """
+    (async function () {
+      var url = '/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151';
+      var headers = {
         'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
         'X-Requested-With': 'XMLHttpRequest'
-      },
-      body: '$body'
-    }).then(function (r) { return r.text() })
-      .then(function (t) { Hamenda.onTimetable(t) })
-      .catch(function () { Hamenda.onTimetable('') });
+      };
+      function post(body) {
+        return fetch(url, { method: 'POST', credentials: 'include', headers: headers, body: body })
+          .then(function (r) { return r.text() });
+      }
+      var candidates = [];
+      try {
+        var html = await fetch(url, { credentials: 'include' }).then(function (r) { return r.text() });
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var y = doc.querySelector('#xnm'), q = doc.querySelector('#xqm');
+        if (y && q && y.value && q.value) candidates.push('xnm=' + y.value + '&xqm=' + q.value);
+      } catch (e) { }
+      [$candidates].forEach(function (b) { if (candidates.indexOf(b) < 0) candidates.push(b) });
+      var last = '', log = '';
+      for (var i = 0; i < candidates.length; i++) {
+        last = await post(candidates[i]);
+        log += candidates[i] + ' len=' + last.length + '; ';
+        try {
+          var json = JSON.parse(last);
+          if (json.kbList && json.kbList.length) break;
+        } catch (e) { }
+      }
+      Hamenda.onDebug(log);
+      Hamenda.onTimetable(last);
+    })();
 """.trimIndent()
+}
