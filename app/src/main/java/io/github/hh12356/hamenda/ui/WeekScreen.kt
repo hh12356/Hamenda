@@ -138,15 +138,23 @@ fun WeekScreen(store: Store, onOpenSettings: () -> Unit) {
                 modifier = Modifier.weight(1f),
                 onChangeWeek = { delta -> if (week + delta >= 1) week += delta },
                 onCreate = { day, minute ->
-                    editTarget = EditTarget(
-                        CourseBlock(
-                            id = System.nanoTime(),
-                            dayOfWeek = day,
-                            startMin = minute,
-                            endMin = (minute + 45).coerceAtMost(settings.dayEndMin),
-                            color = DEFAULT_COLORS[store.data.blocks.size % DEFAULT_COLORS.size]
+                    val end = (minute + 45).coerceAtMost(settings.dayEndMin)
+                    // 新块默认 45 分钟，撞上已有课程就不建。
+                    val overlaps = store.data.blocks.any {
+                        it.dayOfWeek == day && it.activeInWeek(week) &&
+                            minute < it.endMin && it.startMin < end
+                    }
+                    if (!overlaps) {
+                        editTarget = EditTarget(
+                            CourseBlock(
+                                id = System.nanoTime(),
+                                dayOfWeek = day,
+                                startMin = minute,
+                                endMin = end,
+                                color = DEFAULT_COLORS[store.data.blocks.size % DEFAULT_COLORS.size]
+                            )
                         )
-                    )
+                    }
                 },
                 onTapBlock = { detailBlock = it },
                 onLongPressBlock = { menuBlock = it },
