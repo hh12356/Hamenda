@@ -482,14 +482,25 @@ private fun WeekTimeline(
                                                             settings.dayStartMin,
                                                             settings.dayEndMin - p.duration
                                                         )
-                                                    store.upsertBlock(
-                                                        block.copy(
-                                                            dayOfWeek =
-                                                                days[p.targetIdx(colWidthPx, days.size)],
-                                                            startMin = snapped,
-                                                            endMin = snapped + p.duration
+                                                    val targetDay =
+                                                        days[p.targetIdx(colWidthPx, days.size)]
+                                                    // 和该天已有课程重叠就不存，块自然回到原处。
+                                                    val blocked = blocks.any {
+                                                        it.id != block.id &&
+                                                            it.dayOfWeek == targetDay &&
+                                                            it.activeInWeek(week) &&
+                                                            snapped < it.endMin &&
+                                                            it.startMin < snapped + p.duration
+                                                    }
+                                                    if (!blocked) {
+                                                        store.upsertBlock(
+                                                            block.copy(
+                                                                dayOfWeek = targetDay,
+                                                                startMin = snapped,
+                                                                endMin = snapped + p.duration
+                                                            )
                                                         )
-                                                    )
+                                                    }
                                                 }
                                             }
                                             drag = null
