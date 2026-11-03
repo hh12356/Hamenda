@@ -263,13 +263,16 @@ private fun TopBar(
             }
         }
         if (settings.showWeekArrows) {
+            // 箭头要对齐的是标题那一行，而不是整块 58dp 的中线：
+            // 标题下面多一行小字，标题就整体上移了半行，箭头跟着上移同样的距离。
+            val arrowShift = if (settings.showWeekRange) (-15).dp else (-8).dp
             IconButton(
                 onClick = onPrev,
-                modifier = Modifier.align(Alignment.Center).offset(x = (-62).dp)
+                modifier = Modifier.align(Alignment.Center).offset(x = (-62).dp, y = arrowShift)
             ) { ChevronIcon(left = true) }
             IconButton(
                 onClick = onNext,
-                modifier = Modifier.align(Alignment.Center).offset(x = 62.dp)
+                modifier = Modifier.align(Alignment.Center).offset(x = 62.dp, y = arrowShift)
             ) { ChevronIcon(left = false) }
         }
         IconButton(
