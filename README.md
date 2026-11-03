@@ -1,13 +1,17 @@
 # Hamenda
 
-轻量、快速、数据存在本地的安卓课程表。
+一款适用于WHUER的仿Ham课程表的日程安排软件，可以自由规划课外时间，支持从武大教务系统导入课表，主打轻量、快速、数据存于本地
 
+## 效果图
 
+<p align="center">
+  <img src="docs/screenshot-week.jpg" width="45%" alt="周视图" />
+  <img src="docs/screenshot-edit.jpg" width="45%" alt="编辑课程" />
+</p>
 
 ## 功能
 
-- 周视图整屏铺开，不用滚动；今天高亮
-- 长按空白处新建；按住课程再拖可以改时间、跨天（吸附到节次格子，撞车不落地）；长按弹「编辑 / 删除这节课 / 删除这门课」；短按查看详情
+- 长按空白处新建；按住课程再拖可以改时间、跨天（吸附到节次格子，撞车不落地）
 - 左右滑动切换周，压在课程上也能滑；翻到别的周时顶栏有「前往本周」；顶栏箭头可在设置中关闭
 - 左侧刻度点击切换：整点 → 第几节 → 上下课时间
 - 周数按开学日期推算，单双周、1–25 周
@@ -18,42 +22,8 @@
 
 ## 下载
 
-到 [Releases](https://github.com/hh12356/Hamenda/releases) 下载 APK，支持 Android 8.0（API 26）及以上。
-
-## 构建
-
-需要 JDK 17、Android SDK 35（装 Android Studio 最省事）。
-
-```bash
-# local.properties 里写：
-# sdk.dir=D:/dev/android-sdk
-
-./gradlew assembleDebug
-# 产物：app/build/outputs/apk/debug/app-debug.apk
-```
-
-发布版签名需要 `keystore.properties` 与 `.jks` 文件，两者都不进仓库。
-
-## 项目结构
-
-```
-app/src/main/java/io/github/hh12356/hamenda/
-├── MainActivity.kt        入口、主题与页面切换
-├── data/
-│   ├── Models.kt          数据模型、节次表、色板
-│   ├── Store.kt           单文件 JSON 持久化
-│   └── JwImport.kt        教务接口地址与课表解析
-├── ui/
-│   ├── WeekScreen.kt      周视图、手势、课程菜单
-│   ├── EditScreen.kt      新建 / 编辑课程
-│   ├── SettingsScreen.kt  设置与备份
-│   ├── JwImportDialog.kt  内嵌教务登录页
-│   ├── Components.kt      通用小控件
-│   └── theme/Theme.kt     浅色 / 深色主题与主题色
-└── util/TimeUtils.kt      日期、周次、时间工具
-```
-
-完整设计见 [DESIGN.md](DESIGN.md)。
+[Releases](https://github.com/hh12356/Hamenda/releases) 下载 APK，支持 Android 8.0（API 26）及以上。  
+(仅支持安卓)
 
 ## 数据与隐私
 
