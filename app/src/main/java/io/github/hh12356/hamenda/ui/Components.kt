@@ -23,6 +23,7 @@ fun ToggleChip(
     label: String,
     selected: Boolean,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
     onClick: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
@@ -34,13 +35,15 @@ fun ToggleChip(
                 RoundedCornerShape(10.dp)
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp),
+            .padding(horizontal = if (compact) 4.dp else 12.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             label,
             style = MaterialTheme.typography.labelMedium,
-            color = if (selected) colors.onPrimary else colors.onSurfaceVariant
+            color = if (selected) colors.onPrimary else colors.onSurfaceVariant,
+            maxLines = 1,
+            softWrap = false
         )
     }
 }

@@ -309,6 +309,7 @@ fun EditScreen(initial: CourseBlock, onCancel: () -> Unit, onSave: (CourseBlock)
                             label = dayName(iso),
                             selected = day == iso,
                             modifier = Modifier.weight(1f),
+                            compact = true,
                             onClick = { day = iso }
                         )
                     }
