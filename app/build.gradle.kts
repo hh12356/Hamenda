@@ -15,8 +15,8 @@ android {
         applicationId = "io.github.hh12356.hamenda"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 26
+        versionName = "2.6"
     }
 
     signingConfigs {
@@ -51,6 +51,8 @@ android {
 
     buildFeatures {
         compose = true
+        // 设置页页脚显示版本号，避免和这里写两遍。
+        buildConfig = true
     }
 }
 

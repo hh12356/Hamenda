@@ -48,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import io.github.hh12356.hamenda.BuildConfig
 import io.github.hh12356.hamenda.data.CourseBlock
 import io.github.hh12356.hamenda.data.Store
 import io.github.hh12356.hamenda.util.minuteLabel
@@ -261,7 +262,7 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
             }
 
             Text(
-                "Hamenda 0.1.0 · 数据保存在本机，登录教务时才联网",
+                "Hamenda ${BuildConfig.VERSION_NAME} · 数据保存在本机，登录教务时才联网",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.fillMaxWidth(),
