@@ -19,9 +19,6 @@ fun zfTerm(semesterStart: String): Pair<String, String> {
     return year.toString() to if (firstTerm) "3" else "12"
 }
 
-/** 课表接口要求的请求体。 */
-fun zfTermBody(xnm: String, xqm: String) = "xnm=$xnm&xqm=$xqm"
-
 /**
  * 解析 /kbcx/xskbcx_cxXsgrkb.html 返回的 JSON。
  * 结构不对（登录过期、系统改版）返回 null。
@@ -30,8 +27,9 @@ fun parseZfTimetable(text: String): List<CourseBlock>? = try {
     val list = JSONObject(text).optJSONArray("kbList") ?: return null
     (0 until list.length()).mapNotNull { i ->
         val o = list.getJSONObject(i)
-        // jc="1-2" 节次，zcd="1-16周(单)" 周次，xqj 星期 1-7。
-        val bounds = Regex("\\d+").findAll(o.optString("jc")).map { it.value.toInt() }.toList()
+        // jcs="1-2" 节次（老版本叫 jc），zcd="1-16周(单)" 周次，xqj 星期 1-7。
+        val bounds = Regex("\\d+").findAll(o.optString("jcs").ifEmpty { o.optString("jc") })
+            .map { it.value.toInt() }.toList()
         val weeks = parseWeeks(o.optString("zcd"))
         val day = o.optInt("xqj")
         if (day !in 1..7 || bounds.isEmpty() || weeks.isEmpty()) return@mapNotNull null
@@ -54,7 +52,7 @@ fun parseZfTimetable(text: String): List<CourseBlock>? = try {
 
 /** "1-16周(单)" / "1-4周,6-18周(双)" / "5周" → 具体周次。 */
 private fun parseWeeks(zcd: String): Set<Int> =
-    zcd.split(',', '，').flatMap { part ->
+    zcd.split(',', '，', '、').flatMap { part ->
         val m = Regex("(\\d+)(?:-(\\d+))?").find(part) ?: return@flatMap emptyList()
         val lo = m.groupValues[1].toInt()
         val hi = m.groupValues[2].ifBlank { m.groupValues[1] }.toInt()

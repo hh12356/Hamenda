@@ -33,7 +33,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.doOnLayout
@@ -43,7 +42,6 @@ import io.github.hh12356.hamenda.data.CourseBlock
 import io.github.hh12356.hamenda.data.JW_LOGIN_URL
 import io.github.hh12356.hamenda.data.parseZfTimetable
 import io.github.hh12356.hamenda.data.zfTerm
-import io.github.hh12356.hamenda.data.zfTermBody
 
 /**
  * 内嵌教务登录页：账号密码只在教务页面里输入，应用不碰也不存；
@@ -60,9 +58,6 @@ fun JwImportDialog(
     val context = LocalContext.current
     val (xnm, xqm) = remember { zfTerm(semesterStart) }
     var error by remember { mutableStateOf<String?>(null) }
-    // 卡住时至少能看出停在哪一步。
-    var pageUrl by remember { mutableStateOf("") }
-    var debug by remember { mutableStateOf("") }
     val termLabel = remember {
         "$xnm-${xnm.toInt() + 1} 学年 · " + if (xqm == "3") "第一学期" else "第二学期"
     }
@@ -94,12 +89,6 @@ fun JwImportDialog(
         val tried = mutableSetOf<String>()
         var lastUrl = ""
         val bridge = object {
-            // 手机上取不到 logcat，取课表的过程实测只能靠这行显示出来。
-            @JavascriptInterface
-            fun onDebug(text: String) {
-                Handler(Looper.getMainLooper()).post { debug = text }
-            }
-
             @JavascriptInterface
             fun onTimetable(json: String) {
                 Handler(Looper.getMainLooper()).post {
@@ -122,7 +111,6 @@ fun JwImportDialog(
             // 认证中途的 /sso/ 页面也顺手试一次，失败就等下一次跳转。
             override fun onPageFinished(view: WebView, url: String) {
                 lastUrl = url
-                pageUrl = url.substringAfter("://")
                 if (url.contains("login_slogin") || !tried.add(url)) return
                 if (url.startsWith("https://jwgl.whu.edu.cn/")) {
                     view.evaluateJavascript(fetchJs(xnm, xqm), null)
@@ -171,24 +159,6 @@ fun JwImportDialog(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        if (pageUrl.isNotEmpty()) {
-                            Text(
-                                pageUrl,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.outline,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        if (debug.isNotEmpty()) {
-                            Text(
-                                debug,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.outline,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
                     }
                     TextButton(onClick = onDismiss) { Text("取消") }
                 }
@@ -236,10 +206,9 @@ private const val FIX_VH_JS = """(function(){
   new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
 })()"""
 
-// 学年/学期的代码各校不一样（正方常用 3/12，也有 1/2），所以先读课表页自己的默认值，
-// 再按候选依次试，取第一个真的带回课程的响应。
+// 课表接口必须带 validate 和 xzlx=ck，只给 xnm/xqm 时服务器只回一个 kbList 为空的壳。
 private fun fetchJs(xnm: String, xqm: String): String {
-    val candidates = listOf(xqm, "3", "12", "1", "2").distinct()
+    val candidates = listOf(xqm, "3", "12").distinct()
         .joinToString(",") { "'xnm=$xnm&xqm=$it'" }
     return """
     (async function () {
@@ -248,28 +217,20 @@ private fun fetchJs(xnm: String, xqm: String): String {
         'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
         'X-Requested-With': 'XMLHttpRequest'
       };
-      function post(body) {
-        return fetch(url, { method: 'POST', credentials: 'include', headers: headers, body: body })
-          .then(function (r) { return r.text() });
+      // validate 是前端自己拼的随机串，不是服务端下发的。
+      function validate() {
+        return 'sl' + Math.floor(1e10 * Math.random()).toString(36) + Date.now().toString(36);
       }
-      var candidates = [];
-      try {
-        var html = await fetch(url, { credentials: 'include' }).then(function (r) { return r.text() });
-        var doc = new DOMParser().parseFromString(html, 'text/html');
-        var y = doc.querySelector('#xnm'), q = doc.querySelector('#xqm');
-        if (y && q && y.value && q.value) candidates.push('xnm=' + y.value + '&xqm=' + q.value);
-      } catch (e) { }
-      [$candidates].forEach(function (b) { if (candidates.indexOf(b) < 0) candidates.push(b) });
-      var last = '', log = '';
-      for (var i = 0; i < candidates.length; i++) {
-        last = await post(candidates[i]);
-        log += candidates[i] + ' len=' + last.length + '; ';
+      var cands = [$candidates], last = '';
+      for (var i = 0; i < cands.length; i++) {
+        var body = 'validate=' + validate() + '&' + cands[i] + '&xzlx=ck';
+        var r = await fetch(url, { method: 'POST', credentials: 'include', headers: headers, body: body });
+        last = await r.text();
         try {
           var json = JSON.parse(last);
           if (json.kbList && json.kbList.length) break;
         } catch (e) { }
       }
-      Hamenda.onDebug(log);
       Hamenda.onTimetable(last);
     })();
 """.trimIndent()
