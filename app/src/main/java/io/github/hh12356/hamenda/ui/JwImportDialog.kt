@@ -3,9 +3,13 @@ package io.github.hh12356.hamenda.ui
 import android.annotation.SuppressLint
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
+import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -29,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
@@ -54,6 +59,8 @@ fun JwImportDialog(
     val context = LocalContext.current
     val (xnm, xqm) = remember { zfTerm(semesterStart) }
     var error by remember { mutableStateOf<String?>(null) }
+    // 卡住时至少能看出停在哪一步。
+    var pageUrl by remember { mutableStateOf("") }
     val termLabel = remember {
         "$xnm-${xnm.toInt() + 1} 学年 · " + if (xqm == "3") "第一学期" else "第二学期"
     }
@@ -68,7 +75,13 @@ fun JwImportDialog(
                 .replace("; wv", "").replace("Version/4.0 ", "")
             CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
             // 不设 WebChromeClient 时页面里的 alert/confirm 会被直接吞掉。
-            webChromeClient = WebChromeClient()
+            // 顺手把脚本报错打到 logcat：页面白屏时只能靠它定位。
+            webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(m: ConsoleMessage): Boolean {
+                    Log.d("JwWeb", "${m.messageLevel()} ${m.message()} @${m.sourceId()}:${m.lineNumber()}")
+                    return true
+                }
+            }
         }
     }
 
@@ -98,9 +111,20 @@ fun JwImportDialog(
             // 认证中途的 /sso/ 页面也顺手试一次，失败就等下一次跳转。
             override fun onPageFinished(view: WebView, url: String) {
                 lastUrl = url
+                pageUrl = url.substringAfter("://")
                 if (url.contains("login_slogin") || !tried.add(url)) return
                 if (url.startsWith("https://jwgl.whu.edu.cn/")) {
                     view.evaluateJavascript(fetchJs(zfTermBody(xnm, xqm)), null)
+                }
+            }
+
+            override fun onReceivedError(
+                view: WebView,
+                request: WebResourceRequest,
+                err: WebResourceError
+            ) {
+                if (request.isForMainFrame) {
+                    Log.d("JwWeb", "load failed ${request.url}: ${err.description}")
                 }
             }
         }
@@ -133,6 +157,15 @@ fun JwImportDialog(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        if (pageUrl.isNotEmpty()) {
+                            Text(
+                                pageUrl,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                     TextButton(onClick = onDismiss) { Text("取消") }
                 }
