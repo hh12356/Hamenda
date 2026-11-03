@@ -151,6 +151,9 @@ fun WeekScreen(store: Store, onOpenSettings: () -> Unit) {
                                 dayOfWeek = day,
                                 startMin = minute,
                                 endMin = end,
+                                // 新建只落在当前这一周，要每周自己再改。
+                                startWeek = week,
+                                endWeek = week,
                                 color = DEFAULT_COLORS[store.data.blocks.size % DEFAULT_COLORS.size]
                             )
                         )
