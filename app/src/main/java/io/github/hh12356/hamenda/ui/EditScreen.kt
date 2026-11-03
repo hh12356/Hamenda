@@ -71,6 +71,9 @@ fun EditScreen(initial: CourseBlock, onCancel: () -> Unit, onSave: (CourseBlock)
     var showNameError by remember { mutableStateOf(false) }
     var showTimeError by remember { mutableStateOf(false) }
     val weeks = remember { mutableStateListOf<Int>().apply { addAll(initial.startWeek..initial.endWeek) } }
+    // 单/双周填充用的固定区间；否则反复点会按已筛过的周次越缩越小。
+    var weekLo by remember { mutableIntStateOf(initial.startWeek) }
+    var weekHi by remember { mutableIntStateOf(initial.endWeek) }
     val periods = remember { mutableStateListOf<Int>().apply { addAll(periodsInRange(initial.startMin, initial.endMin)) } }
 
     fun syncTimesFromPeriods() {
@@ -249,7 +252,14 @@ fun EditScreen(initial: CourseBlock, onCancel: () -> Unit, onSave: (CourseBlock)
                         ToggleChip(
                             label = "$w",
                             selected = w in weeks,
-                            onClick = { if (w in weeks) weeks.remove(w) else weeks.add(w) }
+                            onClick = {
+                                if (w in weeks) weeks.remove(w) else {
+                                    weeks.add(w)
+                                    // 手点更外的周才扩区间，删周不缩，填充范围保持稳定。
+                                    if (w < weekLo) weekLo = w
+                                    if (w > weekHi) weekHi = w
+                                }
+                            }
                         )
                     }
                 }
@@ -261,10 +271,8 @@ fun EditScreen(initial: CourseBlock, onCancel: () -> Unit, onSave: (CourseBlock)
                             modifier = Modifier.weight(1f),
                             onClick = {
                                 parity = v
-                                // 选单/双周时按当前已选范围自动填好周次，不用手点。
-                                val lo = weeks.minOrNull() ?: 1
-                                val hi = weeks.maxOrNull() ?: 25
-                                val picked = (lo..hi).filter {
+                                // 选单/双周时按固定区间自动填好周次，反复切换结果不变。
+                                val picked = (weekLo..weekHi).filter {
                                     when (v) {
                                         1 -> it % 2 == 1
                                         2 -> it % 2 == 0

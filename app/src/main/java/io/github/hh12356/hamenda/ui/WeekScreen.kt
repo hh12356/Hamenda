@@ -386,7 +386,9 @@ private fun WeekTimeline(
                             val pos = down.position
                             if (!hitBlock(pos)) {
                                 val idx = ((pos.x - leftPx) / colWidthPx).toInt().coerceIn(0, days.size - 1)
-                                val minute = snap15(settings.dayStartMin + ((pos.y - padPx) / pxPerMin).toInt())
+                                val minute = snapToGrid(
+                                    (settings.dayStartMin + (pos.y - padPx) / pxPerMin).toFloat(), settings
+                                )
                                 onCreate(days[idx], minute)
                             }
                         }
@@ -474,8 +476,8 @@ private fun WeekTimeline(
                                         } finally {
                                             if (dragging) {
                                                 drag?.takeIf { it.blockId == block.id }?.let { p ->
-                                                    // 拖动时不吸附，松手才吸附到 15 分钟和最近的一列。
-                                                    val snapped = snap15(p.startMin.roundToInt())
+                                                    // 拖动时不吸附，松手才吸附到最近的一列和格子。
+                                                    val snapped = snapToGrid(p.startMin, settings)
                                                         .coerceIn(
                                                             settings.dayStartMin,
                                                             settings.dayEndMin - p.duration
@@ -639,6 +641,14 @@ private fun LeftLabels(settings: AppSettings, dpPerMin: Dp, onCycle: () -> Unit)
 }
 
 private data class LabelCell(val startMin: Int, val endMin: Int, val text: String)
+
+/** 左缘显示节次时，落点归到最近一节的开始时间。 */
+private fun nearestPeriodStart(minute: Float): Int =
+    SCHOOL_PERIODS.minByOrNull { kotlin.math.abs(it.startMin - minute) }!!.startMin
+
+/** 松手吸附：整点模式按 15 分钟，节次模式按节次格子。 */
+private fun snapToGrid(minute: Float, settings: AppSettings): Int =
+    if (settings.leftLabelMode == 0) snap15(minute.roundToInt()) else nearestPeriodStart(minute)
 
 /** 左缘的每一格，同时也是日程表横线的来源。 */
 private fun labelCells(settings: AppSettings, mode: Int): List<LabelCell> = when (mode) {
