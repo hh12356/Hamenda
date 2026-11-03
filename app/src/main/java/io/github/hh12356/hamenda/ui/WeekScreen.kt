@@ -632,15 +632,18 @@ private data class LabelCell(val startMin: Int, val endMin: Int, val text: Strin
 
 /** 左缘的每一格，同时也是日程表横线的来源。 */
 private fun labelCells(settings: AppSettings, mode: Int): List<LabelCell> = when (mode) {
-    1, 2 -> SCHOOL_PERIODS
-        .filter { it.startMin >= settings.dayStartMin && it.endMin <= settings.dayEndMin }
-        .map {
+    1, 2 -> {
+        // 格子画到下一节上课为止，下课那条线归上一节，避免两条线挤在一起。
+        val periods = SCHOOL_PERIODS
+            .filter { it.startMin >= settings.dayStartMin && it.endMin <= settings.dayEndMin }
+        periods.mapIndexed { i, p ->
             LabelCell(
-                it.startMin,
-                it.endMin,
-                if (mode == 1) "${it.index}" else "${minuteLabel(it.startMin)}\n${minuteLabel(it.endMin)}"
+                p.startMin,
+                periods.getOrNull(i + 1)?.startMin ?: p.endMin,
+                if (mode == 1) "${p.index}" else "${minuteLabel(p.startMin)}\n${minuteLabel(p.endMin)}"
             )
         }
+    }
 
     else -> buildList {
         var h = ((settings.dayStartMin + 59) / 60) * 60
