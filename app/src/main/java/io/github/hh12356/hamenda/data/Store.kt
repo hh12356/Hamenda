@@ -20,7 +20,12 @@ class Store(private val context: Context) {
         private set
 
     private fun load(): AppData = try {
-        if (file.exists()) json.decodeFromString<AppData>(file.readText()) else AppData()
+        val data = if (file.exists()) json.decodeFromString<AppData>(file.readText()) else AppData()
+        // 早期导入是追加，重复导入会留下叠在一起的同一节课；这种叠影会挡着拖动，读进来时去掉。
+        data.copy(blocks = data.blocks.distinctBy { listOf(
+            it.name, it.teacher, it.location, it.dayOfWeek,
+            it.startMin, it.endMin, it.startWeek, it.endWeek, it.parity
+        ) })
     } catch (e: Exception) {
         AppData()
     }
@@ -53,7 +58,8 @@ class Store(private val context: Context) {
         d.copy(blocks = blocks)
     }
 
-    fun addBlocks(blocks: List<CourseBlock>) = update { d -> d.copy(blocks = d.blocks + blocks) }
+    /** 从教务导入整份替换，不再追加。 */
+    fun replaceBlocks(blocks: List<CourseBlock>) = update { d -> d.copy(blocks = blocks) }
 
     fun clearBlocks() = update { it.copy(blocks = emptyList()) }
 

@@ -248,7 +248,7 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
                     shape = RoundedCornerShape(12.dp)
                 ) { Text("登录教务系统") }
                 Text(
-                    "登录后自动取本学期课表并追加到现有课表；密码只在教务页面里输入，应用不保存",
+                    "登录后自动取本学期课表并替换现有课表；密码只在教务页面里输入，应用不保存",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -340,13 +340,15 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
             onDismissRequest = { pendingCourses = null },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             title = { Text("导入课程") },
-            text = { Text("解析到 ${blocks.size} 门课程，会追加到现有课表。") },
+            text = {
+                Text("解析到 ${blocks.size} 门课程，会替换现有 ${store.data.blocks.size} 门课程。")
+            },
             confirmButton = {
                 TextButton(onClick = {
-                    store.addBlocks(blocks)
+                    store.replaceBlocks(blocks)
                     pendingCourses = null
-                    Toast.makeText(context, "已导入 ${blocks.size} 门课程", Toast.LENGTH_SHORT).show()
-                }) { Text("导入") }
+                    Toast.makeText(context, "已替换为 ${blocks.size} 门课程", Toast.LENGTH_SHORT).show()
+                }) { Text("替换", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { pendingCourses = null }) { Text("取消") }

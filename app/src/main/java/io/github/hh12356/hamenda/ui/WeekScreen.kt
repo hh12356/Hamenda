@@ -91,6 +91,9 @@ private val LEFT_WIDTH = 44.dp
 private val TIMELINE_PAD = 10.dp
 private const val SWIPE_THRESHOLD_PX = 120f
 
+/** 手指在课程块上按满这么久才允许拖动，直接滑走的当切周。 */
+private const val DRAG_HOLD_MS = 200L
+
 private data class DragPreview(
     val blockId: Long,
     val originIdx: Int,
@@ -126,8 +129,10 @@ fun WeekScreen(store: Store, onOpenSettings: () -> Unit) {
             TopBar(
                 settings = settings,
                 week = week,
+                currentWeek = currentWeek(settings, today),
                 onPrev = { if (week > 1) week-- },
                 onNext = { week++ },
+                onGoCurrent = { week = currentWeek(settings, today) },
                 onOpenSettings = onOpenSettings
             )
             DayHeaderRow(settings, week, today)
@@ -218,10 +223,13 @@ fun WeekScreen(store: Store, onOpenSettings: () -> Unit) {
 private fun TopBar(
     settings: AppSettings,
     week: Int,
+    currentWeek: Int,
     onPrev: () -> Unit,
     onNext: () -> Unit,
+    onGoCurrent: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
+    val away = week != currentWeek
     Box(
         Modifier
             .fillMaxWidth()
@@ -229,7 +237,10 @@ private fun TopBar(
             .padding(horizontal = 4.dp)
     ) {
         Column(
-            Modifier.align(Alignment.Center),
+            // 不在本周时整块标题都能点，比只点那行小字好按。
+            Modifier
+                .align(Alignment.Center)
+                .then(if (away) Modifier.clickable(onClick = onGoCurrent) else Modifier),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text("第 $week 周", style = MaterialTheme.typography.titleLarge)
@@ -239,6 +250,16 @@ private fun TopBar(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            // 固定占这一行的高度，切周时标题不会上下跳。
+            Box(Modifier.height(16.dp), contentAlignment = Alignment.Center) {
+                if (away) {
+                    Text(
+                        "前往本周",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
         if (settings.showWeekArrows) {
@@ -278,18 +299,21 @@ private fun DayHeaderRow(settings: AppSettings, week: Int, today: LocalDate) {
                 )
                 Spacer(Modifier.height(3.dp))
                 // 两种情况必须一样高，否则切到有今天的那周时表头多出 2dp，
-                // 整张课表被重新缩放，左右滑动看着会抖。
+                // 整张课表被重新缩放，左右滑动看着会抖。胶囊的横向内边距只给今天，
+                // 否则 10/20 这种偏宽的日期会被挤到换行。
                 Box(
                     Modifier
                         .clip(CircleShape)
                         .background(if (isToday) MaterialTheme.colorScheme.primary else Color.Transparent)
-                        .padding(horizontal = 7.dp, vertical = 1.dp)
+                        .padding(horizontal = if (isToday) 7.dp else 0.dp, vertical = 1.dp)
                 ) {
                     Text(
                         if (isToday) "${date.dayOfMonth}" else "${date.monthValue}/${date.dayOfMonth}",
                         style = MaterialTheme.typography.labelSmall,
                         color = if (isToday) MaterialTheme.colorScheme.onPrimary
-                        else MaterialTheme.colorScheme.outline
+                        else MaterialTheme.colorScheme.outline,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
@@ -329,7 +353,9 @@ private fun WeekTimeline(
         val pxPerMin = with(density) { dpPerMin.toPx() }
         val leftPx = with(density) { LEFT_WIDTH.toPx() }
         val padPx = with(density) { TIMELINE_PAD.toPx() }
-        val todayIdx = days.indexOf(LocalDate.now().dayOfWeek.value)
+        // 只在真的翻到本周时给今天那列加底色，否则上上周的周二也会亮着。
+        val today = LocalDate.now()
+        val todayIdx = days.indexOfFirst { dateFor(settings, week, it) == today }
         val textMeasurer = rememberTextMeasurer()
 
         val separator = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)
@@ -368,8 +394,8 @@ private fun WeekTimeline(
                 .pointerInput(days, week, settings.dayStartMin, settings.dayEndMin, blocks) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
-                        // 从课程块起手时交给块的拖动，否则会把长按拖动当横滑消费掉。
-                        if (hitBlock(down.position)) return@awaitEachGesture
+                        // 压在课程块上也不用绕开：块只有在按住一会儿之后才拖，
+                        // 否则它会把移动事件消费掉，横扫切周就失效了。
                         var total = 0f
                         drag(down.id) { change ->
                             total += change.positionChange().x
@@ -451,8 +477,10 @@ private fun WeekTimeline(
                                 .pointerInput(block, week, colWidthPx, pxPerMin, days.size) {
                                     awaitEachGesture {
                                         val down = awaitFirstDown(requireUnconsumed = false)
+                                        val downAt = System.currentTimeMillis()
                                         var acc = Offset.Zero
                                         var dragging = false
+                                        var declined = false
                                         var tapped = false
                                         try {
                                             while (true) {
@@ -460,17 +488,25 @@ private fun WeekTimeline(
                                                 val change =
                                                     event.changes.firstOrNull { it.id == down.id } ?: break
                                                 if (!change.pressed) {
-                                                    tapped = !dragging && !change.isConsumed
+                                                    tapped = !dragging && !declined && !change.isConsumed
                                                     break
                                                 }
                                                 val delta = change.positionChange()
                                                 if (delta != Offset.Zero) {
                                                     acc += delta
-                                                    if (!dragging && acc.getDistance() > viewConfiguration.touchSlop) {
-                                                        dragging = true
-                                                        // 从越过触摸阈值处起算，块的首帧不跳。
-                                                        acc = Offset.Zero
-                                                        onDragBlock()
+                                                    if (!dragging && !declined &&
+                                                        acc.getDistance() > viewConfiguration.touchSlop
+                                                    ) {
+                                                        // 按住一小会儿才算是要拖这块；
+                                                        // 手指立刻滑走的当作切周，不消费事件。
+                                                        if (System.currentTimeMillis() - downAt < DRAG_HOLD_MS) {
+                                                            declined = true
+                                                        } else {
+                                                            dragging = true
+                                                            // 从越过触摸阈值处起算，块的首帧不跳。
+                                                            acc = Offset.Zero
+                                                            onDragBlock()
+                                                        }
                                                     }
                                                     if (dragging) {
                                                         change.consume()
