@@ -60,7 +60,10 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -321,6 +324,7 @@ private fun WeekTimeline(
         val leftPx = with(density) { LEFT_WIDTH.toPx() }
         val padPx = with(density) { TIMELINE_PAD.toPx() }
         val todayIdx = days.indexOf(LocalDate.now().dayOfWeek.value)
+        val textMeasurer = rememberTextMeasurer()
 
         val separator = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)
         val hourGrid = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
@@ -511,6 +515,24 @@ private fun WeekTimeline(
                             val bg = Color(block.color)
                             val fg = if (bg.luminance() > 0.5f) Color(0xFF2B2B33) else Color.White
 
+                            // 只排能完整放下的行，避免半个字被切在块边缘。
+                            val lineName = with(density) { 12.sp.toDp().value }
+                            val lineSub = with(density) { 11.sp.toDp().value }
+                            val innerH = (height - 6.dp).value.coerceAtLeast(0f)
+                            val textWidthPx = with(density) { (colWidth - 11.dp).roundToPx() }
+                            val nameLineCount = if (block.name.isBlank()) 0 else textMeasurer.measure(
+                                block.name,
+                                TextStyle(fontSize = 10.sp, lineHeight = 12.sp, fontWeight = FontWeight.SemiBold),
+                                maxLines = 3,
+                                constraints = Constraints(maxWidth = textWidthPx)
+                            ).lineCount
+                            val nameLines =
+                                minOf(nameLineCount, (innerH / lineName).toInt().coerceIn(0, 3))
+                            var rest = innerH - nameLines * lineName
+                            val teacherLines = if (block.teacher.isNotBlank() && rest >= lineSub) 1 else 0
+                            rest -= teacherLines * lineSub
+                            val locationLines = if (block.location.isNotBlank() && rest >= lineSub) 1 else 0
+
                             Column(
                                 Modifier
                                     .offset(x = x, y = top)
@@ -524,16 +546,16 @@ private fun WeekTimeline(
                                     .then(gesture)
                                     .padding(horizontal = 4.dp, vertical = 3.dp)
                             ) {
-                                Text(
+                                if (nameLines > 0) Text(
                                     block.name,
                                     fontSize = 10.sp,
                                     lineHeight = 12.sp,
-                                    maxLines = 3,
+                                    maxLines = nameLines,
                                     overflow = TextOverflow.Ellipsis,
                                     color = fg,
                                     fontWeight = FontWeight.SemiBold
                                 )
-                                if (block.teacher.isNotBlank()) {
+                                if (teacherLines > 0) {
                                     Text(
                                         block.teacher,
                                         fontSize = 9.sp,
@@ -543,7 +565,7 @@ private fun WeekTimeline(
                                         color = fg.copy(alpha = 0.75f)
                                     )
                                 }
-                                if (block.location.isNotBlank()) {
+                                if (locationLines > 0) {
                                     Text(
                                         block.location,
                                         fontSize = 9.sp,
