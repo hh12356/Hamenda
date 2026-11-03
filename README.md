@@ -5,8 +5,9 @@
 ## 效果图
 
 <p align="center">
-  <img src="docs/screenshot-week.jpg" width="45%" alt="周视图" />
-  <img src="docs/screenshot-edit.jpg" width="45%" alt="编辑课程" />
+  <img src="docs/screenshot-today.jpg" width="20%" alt="本周课表" />
+  <img src="docs/screenshot-week.jpg" width="20%" alt="其他周" />
+  <img src="docs/screenshot-edit.jpg" width="20%" alt="编辑课程" />
 </p>
 
 ## 功能
