@@ -18,6 +18,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -49,8 +52,6 @@ import io.github.hh12356.hamenda.data.CourseBlock
 import io.github.hh12356.hamenda.data.DEFAULT_COLORS
 import io.github.hh12356.hamenda.data.SCHOOL_PERIODS
 import io.github.hh12356.hamenda.util.dayName
-import io.github.hh12356.hamenda.util.minuteLabel
-import io.github.hh12356.hamenda.util.parseTime
 import io.github.hh12356.hamenda.util.periodsInRange
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -63,8 +64,10 @@ fun EditScreen(initial: CourseBlock, onCancel: () -> Unit, onSave: (CourseBlock)
     var color by remember { mutableIntStateOf(initial.color) }
     var parity by remember { mutableIntStateOf(initial.parity) }
     var day by remember { mutableIntStateOf(initial.dayOfWeek) }
-    var startText by remember { mutableStateOf(minuteLabel(initial.startMin)) }
-    var endText by remember { mutableStateOf(minuteLabel(initial.endMin)) }
+    var startH by remember { mutableStateOf((initial.startMin / 60).toString()) }
+    var startM by remember { mutableStateOf((initial.startMin % 60).toString()) }
+    var endH by remember { mutableStateOf((initial.endMin / 60).toString()) }
+    var endM by remember { mutableStateOf((initial.endMin % 60).toString()) }
     var showNameError by remember { mutableStateOf(false) }
     var showTimeError by remember { mutableStateOf(false) }
     val weeks = remember { mutableStateListOf<Int>().apply { addAll(initial.startWeek..initial.endWeek) } }
@@ -75,9 +78,18 @@ fun EditScreen(initial: CourseBlock, onCancel: () -> Unit, onSave: (CourseBlock)
         if (sel.isEmpty()) return
         val first = SCHOOL_PERIODS.first { it.index == sel.first() }
         val last = SCHOOL_PERIODS.first { it.index == sel.last() }
-        startText = minuteLabel(first.startMin)
-        endText = minuteLabel(last.endMin)
+        startH = (first.startMin / 60).toString()
+        startM = (first.startMin % 60).toString()
+        endH = (last.endMin / 60).toString()
+        endM = (last.endMin % 60).toString()
         showTimeError = false
+    }
+
+    fun timeOrNull(h: String, m: String): Int? {
+        val hh = h.toIntOrNull() ?: return null
+        val mm = m.toIntOrNull() ?: return null
+        if (hh !in 0..23 || mm !in 0..59) return null
+        return hh * 60 + mm
     }
 
     Column(
@@ -104,8 +116,9 @@ fun EditScreen(initial: CourseBlock, onCancel: () -> Unit, onSave: (CourseBlock)
                         showNameError = true
                         return@Button
                     }
-                    val start = parseTime(startText)
-                    val end = parseTime(endText)
+                    val start = timeOrNull(startH, startM)
+                    val end = timeOrNull(endH, endM)
+                    // 格式或顺序不合法就不让存。
                     if (start == null || end == null || end <= start) {
                         showTimeError = true
                         return@Button
@@ -202,29 +215,25 @@ fun EditScreen(initial: CourseBlock, onCancel: () -> Unit, onSave: (CourseBlock)
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp)
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(
-                        value = startText,
-                        onValueChange = { startText = it; showTimeError = false },
-                        modifier = Modifier.weight(1f),
-                        label = { Text("开始") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        isError = showTimeError
-                    )
-                    OutlinedTextField(
-                        value = endText,
-                        onValueChange = { endText = it; showTimeError = false },
-                        modifier = Modifier.weight(1f),
-                        label = { Text("结束") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        isError = showTimeError
-                    )
-                }
+                TimeRow(
+                    label = "开始",
+                    hour = startH,
+                    minute = startM,
+                    isError = showTimeError,
+                    onHour = { startH = it; showTimeError = false },
+                    onMinute = { startM = it; showTimeError = false }
+                )
+                TimeRow(
+                    label = "结束",
+                    hour = endH,
+                    minute = endM,
+                    isError = showTimeError,
+                    onHour = { endH = it; showTimeError = false },
+                    onMinute = { endM = it; showTimeError = false }
+                )
                 Text(
-                    if (showTimeError) "格式为 HH:mm（如 8:00），且结束时间要晚于开始时间"
-                    else "格式 HH:mm，如 8:00",
+                    if (showTimeError) "小时填 0–23，分钟填 0–59，且结束时间要晚于开始时间"
+                    else "小时 0–23，分钟 0–59",
                     style = MaterialTheme.typography.bodySmall,
                     color = if (showTimeError) MaterialTheme.colorScheme.error
                     else MaterialTheme.colorScheme.onSurfaceVariant
@@ -306,6 +315,40 @@ fun EditScreen(initial: CourseBlock, onCancel: () -> Unit, onSave: (CourseBlock)
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TimeRow(
+    label: String,
+    hour: String,
+    minute: String,
+    isError: Boolean,
+    onHour: (String) -> Unit,
+    onMinute: (String) -> Unit
+) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(label, Modifier.width(36.dp), style = MaterialTheme.typography.bodyLarge)
+        OutlinedTextField(
+            value = hour,
+            onValueChange = { v -> onHour(v.filter { it.isDigit() }.take(2)) },
+            modifier = Modifier.weight(1f),
+            label = { Text("时") },
+            singleLine = true,
+            isError = isError,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            shape = RoundedCornerShape(12.dp)
+        )
+        OutlinedTextField(
+            value = minute,
+            onValueChange = { v -> onMinute(v.filter { it.isDigit() }.take(2)) },
+            modifier = Modifier.weight(1f),
+            label = { Text("分") },
+            singleLine = true,
+            isError = isError,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            shape = RoundedCornerShape(12.dp)
+        )
     }
 }
 
