@@ -520,18 +520,28 @@ private fun WeekTimeline(
                             val lineSub = with(density) { 11.sp.toDp().value }
                             val innerH = (height - 6.dp).value.coerceAtLeast(0f)
                             val textWidthPx = with(density) { (colWidth - 11.dp).roundToPx() }
-                            val nameLineCount = if (block.name.isBlank()) 0 else textMeasurer.measure(
-                                block.name,
-                                TextStyle(fontSize = 10.sp, lineHeight = 12.sp, fontWeight = FontWeight.SemiBold),
-                                maxLines = 3,
-                                constraints = Constraints(maxWidth = textWidthPx)
-                            ).lineCount
-                            val nameLines =
-                                minOf(nameLineCount, (innerH / lineName).toInt().coerceIn(0, 3))
+                            val nameStyle = TextStyle(fontSize = 10.sp, lineHeight = 12.sp, fontWeight = FontWeight.SemiBold)
+                            val subStyle = TextStyle(fontSize = 9.sp, lineHeight = 11.sp)
+                            fun linesOf(text: String, style: TextStyle, max: Int): Int =
+                                if (text.isBlank()) 0 else textMeasurer.measure(
+                                    text, style, maxLines = max,
+                                    constraints = Constraints(maxWidth = textWidthPx)
+                                ).lineCount
+
+                            val nameLines = minOf(
+                                linesOf(block.name, nameStyle, 3),
+                                (innerH / lineName).toInt().coerceIn(0, 3)
+                            )
                             var rest = innerH - nameLines * lineName
-                            val teacherLines = if (block.teacher.isNotBlank() && rest >= lineSub) 1 else 0
+                            val teacherLines = minOf(
+                                linesOf(block.teacher, subStyle, 2),
+                                (rest / lineSub).toInt().coerceIn(0, 2)
+                            )
                             rest -= teacherLines * lineSub
-                            val locationLines = if (block.location.isNotBlank() && rest >= lineSub) 1 else 0
+                            val locationLines = minOf(
+                                linesOf(block.location, subStyle, 3),
+                                (rest / lineSub).toInt().coerceIn(0, 3)
+                            )
 
                             Column(
                                 Modifier
@@ -560,7 +570,7 @@ private fun WeekTimeline(
                                         block.teacher,
                                         fontSize = 9.sp,
                                         lineHeight = 11.sp,
-                                        maxLines = 1,
+                                        maxLines = teacherLines,
                                         overflow = TextOverflow.Ellipsis,
                                         color = fg.copy(alpha = 0.75f)
                                     )
@@ -570,7 +580,7 @@ private fun WeekTimeline(
                                         block.location,
                                         fontSize = 9.sp,
                                         lineHeight = 11.sp,
-                                        maxLines = 1,
+                                        maxLines = locationLines,
                                         overflow = TextOverflow.Ellipsis,
                                         color = fg.copy(alpha = 0.75f)
                                     )
