@@ -46,8 +46,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import io.github.hh12356.hamenda.data.CourseBlock
 import io.github.hh12356.hamenda.data.Store
+import io.github.hh12356.hamenda.data.parseHamDb
 import io.github.hh12356.hamenda.util.minuteLabel
+import java.io.File
 import java.time.LocalDate
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -57,6 +60,27 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
     val context = LocalContext.current
     val settings = store.data.settings
     var pendingImport by remember { mutableStateOf<String?>(null) }
+    var pendingHam by remember { mutableStateOf<List<CourseBlock>?>(null) }
+
+    val hamLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val file = File(context.cacheDir, "ham-import.db")
+            val copied = runCatching {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    file.outputStream().use { input.copyTo(it) }
+                } ?: error("cannot open input")
+            }.isSuccess
+            val blocks = if (copied) parseHamDb(file.absolutePath) else null
+            file.delete()
+            if (blocks == null) {
+                Toast.makeText(context, "这不是有效的 Ham 课表文件", Toast.LENGTH_SHORT).show()
+            } else {
+                pendingHam = blocks
+            }
+        }
+    }
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
@@ -233,6 +257,19 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
                 )
             }
 
+            SettingsCard("从 Ham 导入") {
+                OutlinedButton(
+                    onClick = { hamLauncher.launch(arrayOf("*/*")) },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("选择 ham.db") }
+                Text(
+                    "课程会追加到现有课表，不覆盖已有课程",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
             Text(
                 "Hamenda 0.1.0 · 数据仅保存在本机",
                 style = MaterialTheme.typography.labelSmall,
@@ -241,6 +278,25 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
                 textAlign = TextAlign.Center
             )
         }
+    }
+
+    pendingHam?.let { blocks ->
+        AlertDialog(
+            onDismissRequest = { pendingHam = null },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            title = { Text("从 Ham 导入") },
+            text = { Text("解析到 ${blocks.size} 门课程，会追加到现有课表。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    store.addBlocks(blocks)
+                    pendingHam = null
+                    Toast.makeText(context, "已导入 ${blocks.size} 门课程", Toast.LENGTH_SHORT).show()
+                }) { Text("导入") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingHam = null }) { Text("取消") }
+            }
+        )
     }
 
     pendingImport?.let { text ->

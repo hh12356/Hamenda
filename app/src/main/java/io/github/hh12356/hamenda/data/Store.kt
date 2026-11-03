@@ -53,6 +53,8 @@ class Store(private val context: Context) {
         d.copy(blocks = blocks)
     }
 
+    fun addBlocks(blocks: List<CourseBlock>) = update { d -> d.copy(blocks = d.blocks + blocks) }
+
     fun deleteBlock(id: Long) = update { d -> d.copy(blocks = d.blocks.filterNot { it.id == id }) }
 
     /** 只删这一周的这一节，其他周不动。 */
