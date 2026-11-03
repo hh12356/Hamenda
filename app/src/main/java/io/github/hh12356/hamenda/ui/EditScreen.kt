@@ -250,7 +250,21 @@ fun EditScreen(initial: CourseBlock, onCancel: () -> Unit, onSave: (CourseBlock)
                             label = label,
                             selected = parity == v,
                             modifier = Modifier.weight(1f),
-                            onClick = { parity = v }
+                            onClick = {
+                                parity = v
+                                // 选单/双周时按当前已选范围自动填好周次，不用手点。
+                                val lo = weeks.minOrNull() ?: 1
+                                val hi = weeks.maxOrNull() ?: 25
+                                val picked = (lo..hi).filter {
+                                    when (v) {
+                                        1 -> it % 2 == 1
+                                        2 -> it % 2 == 0
+                                        else -> true
+                                    }
+                                }
+                                weeks.clear()
+                                weeks.addAll(picked)
+                            }
                         )
                     }
                 }
