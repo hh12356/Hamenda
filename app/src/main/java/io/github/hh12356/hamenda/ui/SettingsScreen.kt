@@ -42,11 +42,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -54,10 +50,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.hh12356.hamenda.data.CourseBlock
 import io.github.hh12356.hamenda.data.Store
-import io.github.hh12356.hamenda.data.parseHamDb
-import io.github.hh12356.hamenda.data.parseInstalledHam
 import io.github.hh12356.hamenda.util.minuteLabel
-import java.io.File
 import java.time.LocalDate
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -67,30 +60,9 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
     val context = LocalContext.current
     val settings = store.data.settings
     var pendingImport by remember { mutableStateOf<String?>(null) }
-    var pendingHam by remember { mutableStateOf<List<CourseBlock>?>(null) }
+    var pendingCourses by remember { mutableStateOf<List<CourseBlock>?>(null) }
     var clearStep by remember { mutableIntStateOf(0) }
-    var showHamHelp by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-
-    val hamLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) {
-            val file = File(context.cacheDir, "ham-import.db")
-            val copied = runCatching {
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    file.outputStream().use { input.copyTo(it) }
-                } ?: error("cannot open input")
-            }.isSuccess
-            val blocks = if (copied) parseHamDb(file.absolutePath) else null
-            file.delete()
-            if (blocks == null) {
-                Toast.makeText(context, "这不是有效的 Ham 课表文件", Toast.LENGTH_SHORT).show()
-            } else {
-                pendingHam = blocks
-            }
-        }
-    }
+    var showJw by remember { mutableStateOf(false) }
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
@@ -275,31 +247,21 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
                 ) { Text("清空所有课程") }
             }
 
-            SettingsCard("从 Ham 导入") {
+            SettingsCard("从教务系统导入") {
                 OutlinedButton(
-                    onClick = {
-                        scope.launch {
-                            // 先自动找已装的 Ham；没有 root 读不到时退回手动选文件。
-                            val blocks = withContext(Dispatchers.IO) { parseInstalledHam(context) }
-                            if (blocks == null) {
-                                showHamHelp = true
-                            } else {
-                                pendingHam = blocks
-                            }
-                        }
-                    },
+                    onClick = { showJw = true },
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                     shape = RoundedCornerShape(12.dp)
-                ) { Text("从 Ham 导入") }
+                ) { Text("登录教务系统") }
                 Text(
-                    "会自动查找手机里的 Ham 课表；读不到时让你手动选 ham.db。课程追加到现有课表",
+                    "登录后自动取本学期课表并追加到现有课表；密码只在教务页面里输入，应用不保存",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
             Text(
-                "Hamenda 0.1.0 · 数据仅保存在本机",
+                "Hamenda 0.1.0 · 数据保存在本机，登录教务时才联网",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.fillMaxWidth(),
@@ -308,26 +270,13 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
         }
     }
 
-    if (showHamHelp) {
-        AlertDialog(
-            onDismissRequest = { showHamHelp = false },
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            title = { Text("无法自动读取 Ham") },
-            text = {
-                Text(
-                    "安卓不允许一个应用读另一个应用的私有数据，Ham 的课表就存在那里。" +
-                        "要么手机已 root，要么用数据线连电脑用 adb 把 ham.db 拉出来，" +
-                        "拿到文件后再导入。"
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    showHamHelp = false
-                    hamLauncher.launch(arrayOf("*/*"))
-                }) { Text("选择文件") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showHamHelp = false }) { Text("取消") }
+    if (showJw) {
+        JwImportDialog(
+            semesterStart = settings.semesterStart,
+            onDismiss = { showJw = false },
+            onResult = { blocks ->
+                showJw = false
+                pendingCourses = blocks
             }
         )
     }
@@ -366,21 +315,21 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
         )
     }
 
-    pendingHam?.let { blocks ->
+    pendingCourses?.let { blocks ->
         AlertDialog(
-            onDismissRequest = { pendingHam = null },
+            onDismissRequest = { pendingCourses = null },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            title = { Text("从 Ham 导入") },
+            title = { Text("导入课程") },
             text = { Text("解析到 ${blocks.size} 门课程，会追加到现有课表。") },
             confirmButton = {
                 TextButton(onClick = {
                     store.addBlocks(blocks)
-                    pendingHam = null
+                    pendingCourses = null
                     Toast.makeText(context, "已导入 ${blocks.size} 门课程", Toast.LENGTH_SHORT).show()
                 }) { Text("导入") }
             },
             dismissButton = {
-                TextButton(onClick = { pendingHam = null }) { Text("取消") }
+                TextButton(onClick = { pendingCourses = null }) { Text("取消") }
             }
         )
     }

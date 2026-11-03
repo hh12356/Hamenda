@@ -19,6 +19,27 @@ data class CourseBlock(
 ) {
     val duration: Int get() = endMin - startMin
 
+    /** 按具体周次集合重算 起始周/结束周/单双周/跳过的周。 */
+    fun withWeeks(weeks: Collection<Int>): CourseBlock {
+        val sorted = weeks.sorted()
+        if (sorted.isEmpty()) return this
+        val lo = sorted.first()
+        val hi = sorted.last()
+        val missing = (lo..hi).filterNot { it in weeks }
+        val parity = when {
+            missing.isEmpty() -> 0
+            sorted.all { it % 2 == 1 } -> 1
+            sorted.all { it % 2 == 0 } -> 2
+            else -> 0
+        }
+        return copy(
+            startWeek = lo,
+            endWeek = hi,
+            parity = parity,
+            skippedWeeks = if (parity == 0) missing else emptyList()
+        )
+    }
+
     fun activeInWeek(week: Int): Boolean =
         week in startWeek..endWeek && week !in skippedWeeks && when (parity) {
             1 -> week % 2 == 1
