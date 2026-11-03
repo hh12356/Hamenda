@@ -3,8 +3,10 @@ package io.github.hh12356.hamenda.data
 import org.json.JSONObject
 import java.time.LocalDate
 
-/** 正方教务的登录页与课表接口（WHU）。 */
-const val JW_LOGIN_URL = "https://jwgl.whu.edu.cn/xtgl/login_slogin.html"
+/** 武大统一身份认证入口，登录后回到教务首页。 */
+const val JW_LOGIN_URL =
+    "https://cas.whu.edu.cn/authserver/login" +
+        "?service=https%3A%2F%2Fjwgl.whu.edu.cn%2Fsso%2Fjznewsixlogin"
 
 /**
  * 按开学日期推算正方的 学年(xnm) 和 学期(xqm：3=第一学期，12=第二学期)。

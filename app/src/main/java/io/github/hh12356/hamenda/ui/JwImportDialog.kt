@@ -3,7 +3,10 @@ package io.github.hh12356.hamenda.ui
 import android.annotation.SuppressLint
 import android.os.Handler
 import android.os.Looper
+import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Arrangement
@@ -58,33 +61,47 @@ fun JwImportDialog(
         WebView(context).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
+            // 统一认证的验证码/二维码跨域加载，三方 Cookie 关掉会一直转圈。
+            settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            // 带 "wv" 标记时部分统一认证页面会走精简流程并卡住，伪装成普通 Chrome。
+            settings.userAgentString = settings.userAgentString
+                .replace("; wv", "").replace("Version/4.0 ", "")
+            CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+            // 不设 WebChromeClient 时页面里的 alert/confirm 会被直接吞掉。
+            webChromeClient = WebChromeClient()
         }
     }
 
     DisposableEffect(Unit) {
-        var requested = false
+        val tried = mutableSetOf<String>()
+        var lastUrl = ""
         val bridge = object {
             @JavascriptInterface
             fun onTimetable(json: String) {
                 Handler(Looper.getMainLooper()).post {
                     val blocks = parseZfTimetable(json)
-                    if (blocks == null) {
-                        error = "课表数据解析失败，可能登录已过期"
-                    } else if (blocks.isEmpty()) {
-                        error = "该学期没有查到课程"
-                    } else {
-                        onResult(blocks)
+                    when {
+                        blocks == null -> if (lastUrl.contains("xtgl/index")) {
+                            error = "课表数据解析失败，可能登录已过期"
+                        }
+                        blocks.isEmpty() -> if (lastUrl.contains("xtgl/index")) {
+                            error = "该学期没有查到课程"
+                        }
+                        else -> onResult(blocks)
                     }
                 }
             }
         }
         web.addJavascriptInterface(bridge, "Hamenda")
         web.webViewClient = object : WebViewClient() {
-            // 正方登录成功后会跳到 xtgl/index 开头的首页，这时才去取课表。
+            // 登录成功后教务会把我们送回 jwgl 的首页，这时用同一会话取课表。
+            // 认证中途的 /sso/ 页面也顺手试一次，失败就等下一次跳转。
             override fun onPageFinished(view: WebView, url: String) {
-                if (requested || !url.contains("xtgl/index")) return
-                requested = true
-                view.evaluateJavascript(fetchJs(zfTermBody(xnm, xqm)), null)
+                lastUrl = url
+                if (url.contains("login_slogin") || !tried.add(url)) return
+                if (url.startsWith("https://jwgl.whu.edu.cn/")) {
+                    view.evaluateJavascript(fetchJs(zfTermBody(xnm, xqm)), null)
+                }
             }
         }
         web.loadUrl(JW_LOGIN_URL)
