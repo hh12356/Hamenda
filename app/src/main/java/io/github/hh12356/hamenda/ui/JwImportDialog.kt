@@ -36,6 +36,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.doOnLayout
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import io.github.hh12356.hamenda.data.CourseBlock
@@ -68,6 +69,9 @@ fun JwImportDialog(
         WebView(context).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
+            // 学校页面是手机版布局，不认 viewport meta 的话整块内容会被挤没。
+            settings.useWideViewPort = true
+            settings.loadWithOverviewMode = true
             // 统一认证的验证码/二维码跨域加载，三方 Cookie 关掉会一直转圈。
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             // 带 "wv" 标记时部分统一认证页面会走精简流程并卡住，伪装成普通 Chrome。
@@ -116,6 +120,9 @@ fun JwImportDialog(
                 if (url.startsWith("https://jwgl.whu.edu.cn/")) {
                     view.evaluateJavascript(fetchJs(zfTermBody(xnm, xqm)), null)
                 }
+                // 学校移动版页面按 100vh 排版，而 WebView 里 100vh 会算成 0，
+                // 整块内容被 overflow 裁掉显示成白屏；改成按内容撑开。
+                view.evaluateJavascript(FIX_VH_JS, null)
             }
 
             override fun onReceivedError(
@@ -182,6 +189,13 @@ fun JwImportDialog(
         }
     }
 }
+
+// 多因子页的 .mobile-page-center-box 高度是 calc(100vh - 44px)，100vh 为 0 时高度变 0，
+// 配合 overflow:hidden 正好把整页内容裁掉，所以只改这两条。
+private const val FIX_VH_JS = """(function(){var s=document.createElement('style');
+s.textContent='.mobile-page-center-box{height:auto!important}'+
+'.mobile-page-content-box{max-height:none!important;overflow:visible!important}';
+document.head.appendChild(s);})()"""
 
 private fun fetchJs(body: String) = """
     fetch('/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151', {
