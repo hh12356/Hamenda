@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +39,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -61,6 +63,7 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
     val settings = store.data.settings
     var pendingImport by remember { mutableStateOf<String?>(null) }
     var pendingHam by remember { mutableStateOf<List<CourseBlock>?>(null) }
+    var clearStep by remember { mutableIntStateOf(0) }
 
     val hamLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -255,6 +258,14 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                OutlinedButton(
+                    onClick = { clearStep = 1 },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) { Text("清空所有课程") }
             }
 
             SettingsCard("从 Ham 导入") {
@@ -278,6 +289,40 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
                 textAlign = TextAlign.Center
             )
         }
+    }
+
+    // 清空课程要连点两次确认，避免误触。
+    if (clearStep > 0) {
+        AlertDialog(
+            onDismissRequest = { clearStep = 0 },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            title = { Text(if (clearStep == 1) "清空所有课程" else "再确认一次") },
+            text = {
+                Text(
+                    if (clearStep == 1) "当前共 ${store.data.blocks.size} 门课程，清空后无法恢复，建议先导出备份。"
+                    else "确定删除全部 ${store.data.blocks.size} 门课程吗？此操作不可撤销。"
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (clearStep == 1) {
+                        clearStep = 2
+                    } else {
+                        store.clearBlocks()
+                        clearStep = 0
+                        Toast.makeText(context, "已清空课程", Toast.LENGTH_SHORT).show()
+                    }
+                }) {
+                    Text(
+                        if (clearStep == 1) "继续" else "清空",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { clearStep = 0 }) { Text("取消") }
+            }
+        )
     }
 
     pendingHam?.let { blocks ->
