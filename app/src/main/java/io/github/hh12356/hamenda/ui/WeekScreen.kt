@@ -678,7 +678,7 @@ private fun labelCells(settings: AppSettings, mode: Int): List<LabelCell> = when
         periods.mapIndexed { i, p ->
             val next = periods.getOrNull(i + 1)
             // 课间并进上一节；午休这种大间隔不并，格子止于下课时间。
-            val end = if (next != null && next.startMin - p.endMin <= 10) next.startMin else p.endMin
+            val end = if (next != null && next.startMin - p.endMin <= 30) next.startMin else p.endMin
             LabelCell(
                 p.startMin,
                 end,
