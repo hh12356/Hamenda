@@ -41,7 +41,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -64,6 +63,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -185,7 +185,8 @@ fun WeekScreen(store: Store, onOpenSettings: () -> Unit) {
     detailBlock?.let { block ->
         AlertDialog(
             onDismissRequest = { detailBlock = null },
-            confirmButton = { TextButton(onClick = { detailBlock = null }) { Text("关闭") } },
+            // 点旁边就关，不再单独留一个「关闭」按钮。
+            confirmButton = {},
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(10.dp).clip(CircleShape).background(Color(block.color)))
@@ -686,7 +687,9 @@ private fun LeftLabels(settings: AppSettings, dpPerMin: Dp, onCycle: () -> Unit)
                     val half = if ('\n' in cell.text) 12.dp else 5.dp
                     Text(
                         text = cell.text,
-                        modifier = Modifier.offset(x = 6.dp, y = mid - half),
+                        // 三种模式都居中放在这一栏里，上下对齐看着才整齐。
+                        modifier = Modifier.fillMaxWidth().offset(y = mid - half),
+                        textAlign = TextAlign.Center,
                         style = style,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

@@ -234,13 +234,14 @@ fun EditScreen(initial: CourseBlock, onCancel: () -> Unit, onSave: (CourseBlock)
                     onHour = { endH = it; showTimeError = false },
                     onMinute = { endM = it; showTimeError = false }
                 )
-                Text(
-                    if (showTimeError) "小时填 0–23，分钟填 0–59，且结束时间要晚于开始时间"
-                    else "小时 0–23，分钟 0–59",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (showTimeError) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                // 平时不提示格式，只在填错时说明原因。
+                if (showTimeError) {
+                    Text(
+                        "小时填 0–23，分钟填 0–59，且结束时间要晚于开始时间",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             }
 
             SectionCard("上课周次") {

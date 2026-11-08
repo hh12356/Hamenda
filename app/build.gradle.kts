@@ -15,8 +15,8 @@ android {
         applicationId = "io.github.hh12356.hamenda"
         minSdk = 26
         targetSdk = 35
-        versionCode = 28
-        versionName = "2.8"
+        versionCode = 29
+        versionName = "2.9"
     }
 
     signingConfigs {

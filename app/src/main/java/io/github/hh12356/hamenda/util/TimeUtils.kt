@@ -47,7 +47,8 @@ fun currentWeek(settings: AppSettings, today: LocalDate = LocalDate.now()): Int 
 }
 
 fun weekRangeLabel(block: CourseBlock): String {
-    val base = "${block.startWeek}–${block.endWeek} 周"
+    val base = if (block.startWeek == block.endWeek) "第 ${block.startWeek} 周"
+    else "${block.startWeek}–${block.endWeek} 周"
     return when (block.parity) {
         1 -> "$base（单周）"
         2 -> "$base（双周）"

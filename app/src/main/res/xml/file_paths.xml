@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 导出备份先写到 cacheDir/backup，再从这里分享出去。 -->
+    <cache-path name="backup" path="backup/" />
+</paths>

@@ -3,7 +3,9 @@ package io.github.hh12356.hamenda.ui
 import android.app.DatePickerDialog
 import androidx.activity.compose.BackHandler
 import android.app.TimePickerDialog
+import android.content.Intent
 import android.widget.Toast
+import androidx.core.content.FileProvider
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -54,6 +56,7 @@ import io.github.hh12356.hamenda.data.CourseBlock
 import io.github.hh12356.hamenda.data.Store
 import io.github.hh12356.hamenda.ui.theme.ACCENTS
 import io.github.hh12356.hamenda.util.minuteLabel
+import java.io.File
 import java.time.LocalDate
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -67,17 +70,23 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
     var clearStep by remember { mutableIntStateOf(0) }
     var showJw by remember { mutableStateOf(false) }
 
-    val exportLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")
-    ) { uri ->
-        if (uri != null) {
-            val ok = runCatching {
-                context.contentResolver.openOutputStream(uri)?.use { out ->
-                    out.write(store.exportJson().toByteArray())
-                } ?: error("cannot open output")
-            }.isSuccess
-            Toast.makeText(context, if (ok) "已导出" else "导出失败", Toast.LENGTH_SHORT).show()
-        }
+    // 导出走系统分享面板，可以直接发给文件传输助手，不用自己去找存到哪了。
+    fun shareBackup() {
+        val ok = runCatching {
+            val out = File(context.cacheDir, "backup").apply { mkdirs() }
+                .resolve("hamenda-backup.json")
+            out.writeText(store.exportJson())
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", out)
+            val send = Intent(Intent.ACTION_SEND).apply {
+                // 有的分享目标（比如微信）不认 application/json，写 */* 才肯出现在面板里。
+                type = "*/*"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, "Hamenda 备份")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(send, "导出备份"))
+        }.isSuccess
+        if (!ok) Toast.makeText(context, "导出失败", Toast.LENGTH_SHORT).show()
     }
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -256,10 +265,15 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
 
             SettingsCard("备份") {
                 Button(
-                    onClick = { exportLauncher.launch("hamenda-backup.json") },
+                    onClick = { shareBackup() },
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                     shape = RoundedCornerShape(12.dp)
                 ) { Text("导出备份") }
+                Text(
+                    "导出会打开分享面板，可以直接发给文件传输助手保存",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 OutlinedButton(
                     onClick = { importLauncher.launch(arrayOf("*/*")) },
                     modifier = Modifier.fillMaxWidth().height(48.dp),
